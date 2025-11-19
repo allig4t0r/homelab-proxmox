@@ -1,0 +1,29 @@
+#cloud-config
+# Ubuntu LTS 24.04 latest
+
+hostname: ${hostname}
+
+manage_etc_hosts: true
+
+users:
+  - name: root
+    ssh_authorized_keys:
+      - ${root_ssh_pub_key}
+  - name: ${default_non_root_user}
+    shell: /bin/bash
+    groups: sudo
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    lock_passwd: false
+    hashed_passwd: ${default_non_root_user_hashed_pw}
+    ssh_authorized_keys:
+      - ${root_ssh_pub_key}
+disable_root: False
+
+package_upgrade: true
+
+timezone: Europe/Moscow
+
+apt:
+  primary:
+    - arches: [default]
+      uri: http://mirror.yandex.ru/ubuntu/

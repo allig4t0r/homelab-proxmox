@@ -1,0 +1,46 @@
+#cloud-config
+# Debian 13
+
+hostname: ${hostname}
+
+manage_etc_hosts: true
+
+users:
+  - name: root
+    ssh_authorized_keys:
+      - ${root_ssh_pub_key}
+  - name: ${default_non_root_user}
+    shell: /bin/bash
+    groups: sudo
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    lock_passwd: false
+    hashed_passwd: ${default_non_root_user_hashed_pw}
+    ssh_authorized_keys:
+      - ${root_ssh_pub_key}
+disable_root: False
+
+package_upgrade: true
+
+timezone: Europe/Moscow
+
+apt:
+  primary:
+    - arches: [default]
+      uri: http://mirror.yandex.ru/debian/
+      # sources_list: |
+      #   Types: deb
+      #   URIs: http://mirror.yandex.ru/debian/
+      #   Suites: $RELEASE
+      #   Components: main non-free non-free-firmware
+  security:
+    - arches: [default]
+      uri: http://mirror.yandex.ru/debian-security
+      # sources_list: |
+      #   Types: deb
+      #   URIs: http://mirror.yandex.ru/debian-security
+      #   Suites: $RELEASE-security
+      #   Components: main
+
+  # sources_list: |
+  #   deb $PRIMARY $RELEASE main non-free non-free-firmware
+  #   deb $SECURITY $RELEASE-security
