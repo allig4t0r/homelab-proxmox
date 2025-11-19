@@ -126,12 +126,66 @@ What needs to be changed in *terraform/variables.tf*:
 3. change base_defaults according to your vm_template_id, dns, gateway, same goes for tag_defaults
 4. be sure that all vms in variable vms do look like vms you're planning to create
 
+What needs to be changed in *terraform/main.tf*:
+1. change the path to the private key for root on the proxmox node in proxmox_user_private_key
+2. change the path to the public key for root to put into /root/.ssh/authorized_keys
+
 ## Using terraform
 
 Finally, here's the main deal. It's super fast and easy! Just don't forget to check what will be deleted or removed in the outputs.
 
 ```bash
+cd homelab-proxmox/terraform
+terraform init
 terraform apply
 ```
 
 You would need to write "yes" and hit Enter for actually applying the changes.
+
+## Possible VM variables
+
+```bash
+    hostname           = string
+    ip_address         = string
+    gateway            = string
+    dns                = list(string)
+    vm_template_id     = number
+    cpu_cores          = number
+    cpu_sockets        = number
+    memory             = string
+    target_node        = string
+    tags               = optional(list(string))
+    machine_type       = optional(string) //"q35" is used in base_defaults as it is newer and better
+    qemu_os            = optional(string) //"l26" is used in base_defaults cause it is linux in the end
+    qemu_agent         = optional(bool) //whether or not there is qemu-agent inside the vm
+    hdd_storage        = optional(string) //"local-lvm" by prodiver defaults, disk goes to scsi1
+    hdd_size           = optional(string)
+    firewall           = optional(bool)
+    bios               = optional(string) //"ovmf" is used in base_defaults as I prefer to have UEFI on all my VMs
+    secure_boot        = optional(bool) //false in base_defaults, enables pre-enroll-keys option to preload Microsoft Standard Secure Boot keys
+    bridge             = optional(string)
+    reboot_after_update = optional(bool) //tf provider option, I keep it at false to not mess with working VMs
+    description        = optional(string)
+    vlan_tag           = optional(number)
+    vm_id              = optional(number)
+    native_hdd_size    = optional(bool) //false by default, allows to keep original cloud image size. conflicts with hdd_size
+    boot_order         = optional(string) //["scsi1", "ide2"] by default as I keep scsi0 for cloudInit drive and ide2 for cdrom
+    cloud_config_user_enabled = optional(bool) //allows to generate and set cicustom cloud-init user file
+    cloud_config_network_enabled = optional(bool) //allows to generate and set cicustom cloud-init network file
+    cloud_config_ssh_user = optional(string) //user that is going to be used for proxmox own cloud-init settings (can be seen in UI)
+    started            = optional(bool)
+    on_boot            = optional(bool) //allows vm to boot automatically when proxmox node starts
+    scsihw             = optional(string) //"virtio-scsi-single" in base_defaults as this gives best performance per proxmox documentation
+```
+
+## Recommendations & Notes
+
+1. Do not use DHCP on proxmox node. Always use static addresses.
+2. Use q35 machine type with ovmf bios and UEFI without pre_enrolled_keys. Unless you have Windows VMs those keys are not needed and can actually make your life harder when installing NVIDIA drivers etc.
+3. VMs are always created with memory ballooning enabled and I see no reason to disable this.
+4. NVMe is a way to go in case you want to have real fast cloning. Proxmox can live on any old SSD you have and you partition NVMe as LVM-Thin solely for VMs. LVM-Thin type enables most modern features like Snapshots and will save you a ton of space.
+5. When you specify cloud_config_ssh_user, it fully disables generation of cloud-config user file even with cloud_config_user_enabled = true. cloud_config_ssh_user should be null (non-existent) for cloud-config user file to be generated
+6. KISS. Or don't overthink s#it — I really wanted everything to be as simple as possible for describing new vms. Thus I came to the point when you can specify only a VM name, static IP and tag and everything else will be taken from defaults. Concise and cozy. I tried to move vms var to vms.tfvars file but you'd need to run terraform with -var-file=vms.tfvars and that definitely feels worse than just **tf apply**.
+7. I recommend to keep provider fresh and check for new versions from time to time. It's enough to change the version in terraform/modules/cloud-init/provider.tf and run terraform init -upgrade after that. Check new releases here https://github.com/bpg/terraform-provider-proxmox/releases
+8. Cloud-init files are not automatically deleted from proxmox node. However they will be fully overwritten in case you have a vm with the same hostname so this isn't an issue for me. Generated cloud-init files in generated folder are removed automatically.
+9. Try to put as much configuration settings in cloud-init files, that will make your life super easy. I.e. creation of certain configs or installing packages. Make your homelab real cozy!
