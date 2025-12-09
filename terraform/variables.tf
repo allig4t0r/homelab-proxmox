@@ -94,7 +94,7 @@ locals {
       local.base_defaults,
       merge([
         for tag in lookup(vm_spec, "tags", {}) :
-        lookup(local.tag_defaults, tag, {})
+          lookup(local.tag_defaults, tag, {})
       ]...),
       merge([
         lookup(local.node_defaults, "target_node", {})
