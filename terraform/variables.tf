@@ -27,50 +27,55 @@ variable "default_non_root_user_hashed_pw" {
 
 locals {
   base_defaults = {
-    vm_template_id     = 910
-    cpu_sockets        = 1
-    cpu_cores          = 2
-    memory             = 2048
-    machine_type       = "q35"
-    secure_boot        = false
-    reboot_after_update = false
-    started            = true
-    target_node        = "proxmox"
-    qemu_os            = "l26"
-    qemu_agent         = true
-    bios               = "ovmf"
-    on_boot            = true
-    scsihw             = "virtio-scsi-single"
-    hdd_storage        = "nvme"
-    hdd_size           = 30
-    dns                = ["10.100.52.2"]
-    gateway            = "10.100.52.1"
-    bridge             = "vmbr0"
-    firewall           = false
+    vm_template_id            = 910
+    cpu_sockets               = 1
+    cpu_cores                 = 2
+    memory                    = 2048
+    machine_type              = "q35"
+    secure_boot               = false
+    reboot_after_update       = false
+    # started                   = true
+    target_node               = "proxmox"
+    qemu_os                   = "l26"
+    qemu_agent                = true
+    bios                      = "ovmf"
+    on_boot                   = true
+    scsihw                    = "virtio-scsi-single"
+    hdd_storage               = "nvme"
+    hdd_size                  = 30
+    dns                       = ["10.100.52.2"]
+    gateway                   = "10.100.52.1"
+    bridge                    = "vmbr0"
+    firewall                  = false
     cloud_config_user_enabled = true
-    description        = "Managed by Terraform by //AG"
-    tags               = ["terraform", "ubuntu"]
+    description               = "Managed by Terraform by //AG"
+    tags                      = ["terraform", "ubuntu"]
+    stop_on_destroy           = true
+    wait_for_ipv4             = true
+    dns_domain                = "ag"
+    cpu_units                 = 100
+    boot_order                = ["scsi1", "ide2"]
   }
 
   # one tag from here PER VM!
   tag_defaults = {
     flatcar = {
-      vm_template_id     = 904 # flatcar
-      cpu_sockets        = 2
-      memory             = 4096
-      # hdd_size           = 10
+      vm_template_id        = 904 # flatcar
+      cpu_sockets           = 2
+      memory                = 4096
+      # hdd_size              = 10
       cloud_config_ssh_user = "core"
-      on_boot             = false
-      native_hdd_size    = true
+      on_boot               = false
+      native_hdd_size       = true
     }
 
     talos = {
-      vm_template_id     = 905 # talos v1.11.5
-      cpu_sockets        = 2
-      memory             = 4096
-      cloud_config_ssh_user = "root"
-      on_boot             = false
-      native_hdd_size    = true
+      vm_template_id            = 906 # talos v1.11.5
+      cpu_sockets               = 2
+      memory                    = 4096
+      hdd_size                  = 14
+      cloud_config_user_enabled = false
+      on_boot                   = false
     }
   }
 
@@ -84,19 +89,35 @@ locals {
     }
   }
 
- vms_with_defaults = {
-    for vm_name, vm in var.vms : vm_name => merge(
+  vms_with_defaults = {
+    for vm_name, vm_spec in var.vms : vm_name => merge(
       local.base_defaults,
       merge([
-        for tag in lookup(vm, "tags", {}) :
-          lookup(local.tag_defaults, tag, {})
+        for tag in lookup(vm_spec, "tags", {}) :
+        lookup(local.tag_defaults, tag, {})
       ]...),
       merge([
         lookup(local.node_defaults, "target_node", {})
       ]...),
-      vm
+      vm_spec
     )
   }
+
+  extra_disks = {
+    for vm_name, vm_spec in var.vms : vm_name => [
+      for key, value in vm_spec :
+      {
+        interface = "scsi${regex("\\d+", key)}"
+        size      = value
+      }
+      if can(regex("^hdd[0-9]+_size$", key)) && value != null
+    ]
+  }
+}
+
+output "extra_disks" {
+  value = local.extra_disks
+  description = "Show what extra disks are configured."
 }
 
 variable vms {

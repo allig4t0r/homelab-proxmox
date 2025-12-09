@@ -2,25 +2,25 @@
 resource "local_file" "cloud_init_user_file" {
   for_each = {
     for k, v in var.vms : k => v
-    if v.cloud_config_ssh_user == null && v.cloud_config_user_enabled == true
+      if v.cloud_config_ssh_user == null && v.cloud_config_user_enabled == true
   }
 
   filename = "${path.module}/generated/cloud_init_user_${each.value.hostname}.yaml"
   content = templatefile("${path.module}/templates/${each.value.vm_template_id != null ? each.value.vm_template_id : 910}_user.tftpl", {
-    hostname                = each.value.hostname
-    ip_address              = each.value.ip_address //for flatcar ignition
-    gateway                 = each.value.gateway
-    dns                     = each.value.dns
-    root_ssh_pub_key        = var.root_ssh_pub_key
-    default_non_root_user   = var.default_non_root_user
+    hostname                        = each.value.hostname
+    ip_address                      = each.value.ip_address //for flatcar ignition
+    gateway                         = each.value.gateway
+    dns                             = each.value.dns
+    root_ssh_pub_key                = var.root_ssh_pub_key
+    default_non_root_user           = var.default_non_root_user
     default_non_root_user_hashed_pw = var.default_non_root_user_hashed_pw
   })
 }
 
 resource "local_file" "cloud_init_network_file" {
   for_each = {
-    for k, v in var.vms : k=> v
-    if v.cloud_config_network_enabled == true
+    for k, v in var.vms : k => v
+      if v.cloud_config_network_enabled == true
   }
 
   filename = "${path.module}/generated/cloud_init_network_${each.value.hostname}.yaml"
@@ -39,8 +39,8 @@ resource "terraform_data" "cloud_init_user_file" {
   ]
 
   for_each = {
-    for k, v in var.vms : k=> v
-    if v.cloud_config_ssh_user == null && v.cloud_config_user_enabled == true
+    for k, v in var.vms : k => v
+      if v.cloud_config_ssh_user == null && v.cloud_config_user_enabled == true
   }
 
   connection {
@@ -63,8 +63,8 @@ resource "terraform_data" "cloud_init_network_file" {
   ]
 
   for_each = {
-    for k, v in var.vms : k=> v
-    if v.cloud_config_network_enabled == true
+    for k, v in var.vms : k => v
+      if v.cloud_config_network_enabled == true
   }
 
   connection {
@@ -85,14 +85,20 @@ resource "proxmox_virtual_environment_vm" "virtual_machines" {
   for_each = { for key, value in var.vms : key => value }
 
   reboot_after_update = each.value.reboot_after_update
-  started = each.value.started
+  started             = each.value.started
+  stop_on_destroy     = each.value.stop_on_destroy
+  name                = each.value.hostname
+  vm_id               = each.value.vm_id
+  description         = each.value.description
+  node_name           = each.value.target_node
 
-  name        = each.value.hostname
-  vm_id       = each.value.vm_id
-  description = each.value.description
-  node_name   = each.value.target_node
-  # node_name   = var.proxmox_host_ipv4_addrs[each.value.target_node]
-  
+  bios          = each.value.bios
+  on_boot       = each.value.on_boot
+  tags          = each.value.tags
+  machine       = each.value.machine_type
+  boot_order    = each.value.boot_order
+  scsi_hardware = each.value.scsihw
+
   clone {
     vm_id = each.value.vm_template_id
   }
@@ -100,42 +106,46 @@ resource "proxmox_virtual_environment_vm" "virtual_machines" {
   agent {
     enabled = each.value.qemu_agent
     trim    = true
+    wait_for_ip {
+      ipv4 = each.value.wait_for_ipv4
+    }
   }
 
   cpu {
-    sockets   = each.value.cpu_sockets
-    cores     = each.value.cpu_cores
-    type      = "host"
-    units     = 100
+    sockets = each.value.cpu_sockets
+    cores   = each.value.cpu_cores
+    type    = "host"
+    units   = each.value.cpu_units
   }
 
   memory {
     dedicated = each.value.memory
-    floating = each.value.memory
+    floating  = each.value.memory
   }
-
-  bios        = each.value.bios
-  on_boot     = each.value.on_boot
-  tags        = each.value.tags
-  boot_order  = each.value.boot_order != null ? [each.value.boot_order] : ["scsi1", "ide2"]
-
-  machine = each.value.machine_type
+  
   operating_system {
     type = each.value.qemu_os
   }
-  scsi_hardware = each.value.scsihw
 
-  efi_disk {
-    datastore_id = each.value.hdd_storage
-    type = "4m"
-    pre_enrolled_keys = each.value.secure_boot
+  dynamic efi_disk {
+    for_each = each.value.bios == "ovmf" ? [1] : []
+    content {
+      datastore_id      = each.value.hdd_storage
+      type              = "4m"
+      pre_enrolled_keys = each.value.secure_boot
+    }
   }
 
   initialization {
     interface     = "scsi0"
     datastore_id  = each.value.hdd_storage
-    dns {
-      servers = each.value.dns
+    
+    dynamic dns {
+      for_each = each.value.cloud_config_network_enabled == true ? [] : [1]
+      content {
+        domain  = each.value.dns_domain
+        servers = each.value.dns
+      }
     }
 
     dynamic ip_config {
@@ -143,7 +153,7 @@ resource "proxmox_virtual_environment_vm" "virtual_machines" {
       content {
         ipv4 {
           address = each.value.ip_address
-          gateway = each.value.gateway
+          gateway = each.value.ip_address == "dhcp" ? null : each.value.gateway
         }
       }
     }
@@ -151,10 +161,11 @@ resource "proxmox_virtual_environment_vm" "virtual_machines" {
     dynamic user_account {
       for_each = each.value.cloud_config_ssh_user != null ? [1] : []
       content {
-        keys = [var.root_ssh_pub_key]
+        keys     = [var.root_ssh_pub_key]
         username = each.value.cloud_config_ssh_user
       }
     }
+
     network_data_file_id = each.value.cloud_config_network_enabled == true ? "local:snippets/cloud_init_network_${each.value.hostname}.yaml" : null
     user_data_file_id = each.value.cloud_config_user_enabled == true && each.value.cloud_config_ssh_user == null ? "local:snippets/cloud_init_user_${each.value.hostname}.yaml" : null
   }
@@ -162,18 +173,30 @@ resource "proxmox_virtual_environment_vm" "virtual_machines" {
   dynamic disk {
     for_each = each.value.native_hdd_size == true ? [] : [1]
     content {
-      interface     = "scsi1"
-      size          = each.value.hdd_size
-      datastore_id  = each.value.hdd_storage
-      iothread      = true
-      ssd           = true
-      discard       = "on"
+      interface    = "scsi1"
+      size         = each.value.hdd_size
+      datastore_id = each.value.hdd_storage
+      iothread     = true
+      ssd          = true
+      discard      = "on"
+    }
+  }
+
+  dynamic "disk" {
+    for_each = var.extra_disks[each.key]
+    content {
+      interface    = disk.value.interface
+      size         = disk.value.size
+      datastore_id = each.value.hdd_storage
+      iothread     = true
+      ssd          = true
+      discard      = "on"
     }
   }
 
   cdrom {
-    interface     = "ide2"
-    file_id       = "none"
+    interface = "ide2"
+    file_id   = each.value.iso_image != null ? each.value.iso_image : "none"
   }
 
   network_device {
