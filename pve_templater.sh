@@ -9,6 +9,7 @@
 # Requires:
 # libguestfs-tools to install qemu-guest-agent inside cloud images
 # wget to download the images
+# xz to unzip talos images
 # curl and jq for getting the metadata, latest version info, etc
 
 set -euo pipefail
