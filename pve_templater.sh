@@ -242,6 +242,8 @@ EOF
 )"
     echo "[INFO] Converting VM ${vmid} to template..."
     qm template "$vmid"
+    echo "Removing image ${talos_image}"
+    rm -f "$talos_image"
 }
 
 ###############################################################################
