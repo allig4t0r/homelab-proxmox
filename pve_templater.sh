@@ -45,11 +45,11 @@ EOF
 require_bin() {
     if ! command -v "$1" >/dev/null 2>&1; then
         if [ "$1" = "virt-customize" ]; then
-            echo "ERROR: libguestfs-tools required for injecting qemu-guest-agent." >&2
+            echo "[ERROR] libguestfs-tools required for injecting qemu-guest-agent." >&2
         elif [ "$1" = "qm" ]; then
-            echo "ERROR: Are we on Proxmox host? qm not found" >&2
+            echo "[ERROR] Are we on Proxmox host? qm not found" >&2
         else
-            echo "ERROR: Required binary '$1' not installed." >&2
+            echo "[ERROR] Required binary '$1' not installed." >&2
         fi
         exit 1
     fi
@@ -99,21 +99,28 @@ import_disk() {
         --boot order=scsi1
 }
 
-get_vm_hash() {
+get_template_info() {
     require_bin qm
-    local vmid="$1"
+    local mode="$1"
+    local vmid="$2"
+    local result
     if qm config "$vmid" >/dev/null 2>&1; then
         local desc="$(
             qm config "$vmid" | \
             grep -i '^description:' | \
             sed 's/description: //'
         )"
-        local hash="$(
-            echo "$desc" | \
-            grep -oP '\b[a-f0-9]{64}\b|\b[a-f0-9]{128}\b'
-        )"
-        if [ -n "$hash" ]; then
-            echo "$hash"
+        case "$mode" in
+            hash) result="$(echo "$desc" | \
+                grep -Eo '\b[a-f0-9]{64}\b|\b[a-f0-9]{128}\b'
+            )";;
+            tag) result="$(echo "$desc" | \
+                grep -Eo 'v?[0-9]+(\.[0-9]+)+'
+            )";;
+            *) echo "[WARN] Unsupported template get info mode"; return 1;;
+        esac
+        if [ -n "$result" ]; then
+            printf '%s' "$result"
         else
             echo ""
         fi
@@ -160,11 +167,11 @@ get_latest_github() {
     local project="$1"
     local data
     data="$(
-        curl --silent --fail --show-error \
+        curl --silent --fail-with-body \
             -H "Accept: application/vnd.github+json" \
             "https://api.github.com/repos/${project}/releases/latest"
     )"
-    echo $data
+    printf '%s' "$data"
 }
 
 get_tag() {
@@ -172,7 +179,7 @@ get_tag() {
     local data="$1"
     local tag
     tag="$(jq -er '.tag_name' <<<"$data")"
-    echo $tag
+    printf '%s' "$tag"
 }
 
 get_published_at() {
@@ -180,7 +187,7 @@ get_published_at() {
     local data="$1"
     local published_at
     published_at="$(jq -er '.published_at' <<<"$data")"
-    echo $published_at
+    printf '%s' "$published_at"
 }
 
 #################################IMAGES########################################
@@ -192,17 +199,19 @@ dl_image() {
     local target_path
     mkdir -p "$CACHE_DIR"
     target_path="${CACHE_DIR%/}/$(basename "$image_url")"
-    wget -q -O "$target_path" "$image_url"
-    hash="$(compute_hash sha512 "$target_path")"
+    echo "[INFO] Downloading ${image_url}..."
+    wget -q --show-progress -O "$target_path" "$image_url"
+    hash="$(get_hash sha512 "$target_path")"
+    echo "[INFO] SHA512 hashsum: ${hash}"
 }
 
-compute_hash() {
+get_hash() {
     local hash_type="$1"
     local file="$2"
     case "$hash_type" in
         sha256) sha256sum "$file" | awk '{print $1}';;
         sha512) sha512sum "$file" | awk '{print $1}';;
-        *) echo "Unsupported hash type"; exit 1;;
+        *) echo "[WARN] Unsupported hash type"; return 1;;
     esac
 }
 
@@ -222,14 +231,24 @@ talos() {
     local name="$2"
     local talos_url
     local talos_image
-    local latest_data
-    local latest_tag
-    local latest_date
-    latest_data="$(get_latest_github "siderolabs/talos")"
-    latest_tag="$(get_tag "$latest_data")"
-    latest_date="$(get_published_at "$latest_data")"
+    local latest_data="$(get_latest_github "siderolabs/talos")"
+    local latest_tag="$(get_tag "$latest_data")"
+    local latest_date="$(get_published_at "$latest_data")"
+    local current_tag="$(get_template_info tag "$vmid")"
     talos_url="https://factory.talos.dev/image/${TALOS_SCHEMATIC_ID}/${latest_tag}/nocloud-amd64.raw.xz"
     talos_image="${CACHE_DIR%/}/$(basename "${talos_url%.xz}")"
+    if [[ -z "$latest_data" ]]; then
+        echo "[ERROR] failed to fetch latest GitHub release"
+        return 1
+    elif [[ -z "$latest_tag" ]]; then
+        echo "[ERROR] failed to parse latest tag"
+        return 1
+    elif [[ -z "$current_tag" ]]; then
+        echo "[WARN] failed to get current tag"
+    elif [[ "$current_tag" = "$latest_tag" ]]; then
+        echo "[INFO] Talos image already up-to-date. Exiting."
+        return 0
+    fi
     dl_image "$talos_url"
     xz -dfk "${CACHE_DIR%/}/$(basename "$talos_url")"
     create_vm "$vmid" "$name"
@@ -237,7 +256,7 @@ talos() {
     qm set "$vmid" --description "$(cat <<EOF
 Talos Linux published at: ${latest_date}  
 Version: ${latest_tag}  
-Date: $(date)
+Date: $(date +"%a %b %d %H:%M:%S %Z %Y")
 EOF
 )"
     echo "[INFO] Converting VM ${vmid} to template..."
@@ -254,7 +273,7 @@ main() {
 #   parse_flags "$@"
 #   log_info "###############################################################################"
 #   log_info "Start time:" __ts
-    talos "944" "talos-latest"
+    talos "905" "talos-latest"
 }
 
 main "$@"
