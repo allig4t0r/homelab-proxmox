@@ -12,14 +12,18 @@
 # xz to unzip talos images
 # curl and jq for getting the metadata, latest version info, etc
 # lsof for checking lock file descriptors
+#
+# Check logs using:
+#     journalctl -t pve-templater
+#     less /var/log/pve_templater.log
 
 set -euo pipefail
 # set -o errtrace
 # set -o functrace
 
-LOG_FILE="/var/log/pve_templater.log"
+LOG_FILE="/var/log/pve-templater.log"
 DEBUG_ENABLED=0  #TODO get value from -v/--verbose?
-LOCK_FILE="/tmp/pve_templater.lock"
+LOCK_FILE="/tmp/pve-templater.lock"
 MAX_LOG_SIZE=1048576   # 1MB
 CACHE_DIR="/var/lib/vz/template/images"
 STORAGE="nvme"
@@ -42,9 +46,11 @@ TALOS_SCHEMATIC_ID="46d4c1f71ea8a0d5deeb85c27e5f4e9479ae592a532de2856f9692694929
 display_usage() {
   log_debug "Displaying usage"
   cat <<EOF
-Usage: pve_templater.sh <ubuntu|talos|flatcar> <vm id> [--resize <size>]
+Usage: pve_templater.sh <ubuntu|talos|flatcar> <vm id> [--resize <size>] [--schematic <id>]
 
-  --resize   What size template disk should be //TODO
+  --resize     What size template disk should be //TODO?
+  --schematic  If you want to specify Talos schematic ID //TODO
+  --codename   If you want to specify Ubuntu codename //TODO
 EOF
 }
 
@@ -184,6 +190,9 @@ _log() {
     # UTC timestamps
     # ts="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 
+    # STDOUT
+    printf '[%s] %s\n' "$level" "$msg"
+
     # File log
     printf '%s [%s] %s\n' "$ts" "$level" "$msg" >>"$LOG_FILE"
 
@@ -207,7 +216,7 @@ rotate_logs() {
         local size
         log_debug "Log file ${LOG_FILE} exists"
         size=$(stat -c%s "$LOG_FILE")
-        log_debug "Log filesize: ${size}"
+        log_debug "Log filesize: $(numfmt --to=iec "$size")"
         if (( size > "$MAX_LOG_SIZE" )); then
             log_debug "Log exceeds 1MB. Rotating the log..."
             mv "$LOG_FILE" "${LOG_FILE}.$(date -u +%Y%m%d%H%M%S)"
@@ -272,7 +281,8 @@ dl_image() {
     require_bin wget
 
     local image_url="$1"
-    local hash
+    local hash512
+    local hash256
     local target_path
     local tmp_path
 
@@ -308,14 +318,22 @@ dl_image() {
         return 1
     fi
 
-    if ! hash="$(get_hash sha512 "$tmp_path")"; then
-        log_error "Failed to calculate SHA512 hash for file: ${tmp_path}"
-        log_debug "Removing temporary file: ${tmp_path}"
-        rm -f "$tmp_path"
-        return 1
+    if ! hash512="$(get_hash sha512 "$tmp_path")"; then
+        log_warn "Failed to calculate SHA512 hash for file: ${tmp_path}"
+        # log_debug "Removing temporary file: ${tmp_path}"
+        # rm -f "$tmp_path"
+        # return 1
     fi
 
-    log_info "SHA512 checksum: ${hash}"
+    if ! hash256="$(get_hash sha256 "$tmp_path")"; then
+        log_warn "Failed to calculate SHA256 hash for file: ${tmp_path}"
+        # log_debug "Removing temporary file: ${tmp_path}"
+        # rm -f "$tmp_path"
+        # return 1
+    fi
+
+    log_info "SHA512 checksum: ${hash512}"
+    log_info "SHA256 checksum: ${hash256}"
 
     if ! mv -f "$tmp_path" "$target_path"; then
         log_error "Failed to move file into cache: ${target_path}"
@@ -397,10 +415,15 @@ EOF
     rm -f "$talos_image"
 }
 
+ubuntu() {
+
+}
+
 ###############################################################################
 
 main() {
     trap 'log_error "Command failed: \"$BASH_COMMAND\" (line $LINENO)"' ERR
+    trap 'rm -f "$LOCK_FILE"; log_debug "Lock file removed"' EXIT
     get_lock
     rotate_logs
     log_info "=== pve-templater started (PID $$) ==="    
