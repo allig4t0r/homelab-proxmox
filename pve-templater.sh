@@ -2,7 +2,7 @@
 #
 # Alexander Gerasimov allig4t0r[@]gmail.com
 #
-# Script to create vm templates on Proxmox node with ease.
+# Bash framework to create VM templates on Proxmox nodes with ease.
 # Especially suited to keep those templates up-to-date with the latest versions.
 # Where applicable, hash sums and other metadata is saved in the Notes section of the template vm.
 #
@@ -16,11 +16,20 @@
 # Check logs using:
 #     journalctl -t pve-templater
 #     less /var/log/pve_templater.log
+# 
+# Preferred way of using the script with multiple templates is to run all template functions in main():
+#        main() {
+#            <..>
+#            log_info "================== pve-templater started (PID $$) =================="
+#            talos "905" "talos-latest"
+#            ubuntu "900" "ubuntu-latest"
+#            flatcar "904" "flatcar-latest"
+#            log_info "================== pve-templater finished successfully =================="
+#        }
 
 set -euo pipefail
-# set -o errtrace
-# set -o functrace
 
+LOG_TO_CONSOLE=1
 LOG_FILE="/var/log/pve-templater.log"
 DEBUG_ENABLED=0  #TODO get value from -v/--verbose?
 LOCK_FILE="/tmp/pve-templater.lock"
@@ -54,8 +63,25 @@ Usage: pve_templater.sh <ubuntu|talos|flatcar> <vm id> [--resize <size>] [--sche
 EOF
 }
 
+check_requirements() {
+    local missing=()
+
+    for bin in "$@"; do
+        command -v "$bin" >/dev/null 2>&1 || missing+=("$bin")
+    done
+
+    if (( ${#missing[@]} > 0 )); then
+        log_crit "Missing required dependencies:"
+        for bin in "${missing[@]}"; do
+            log_crit "  - ${bin}"
+        done
+        exit 1
+    fi
+}
+
 require_bin() {
     local bin="$1"
+
     log_debug "Checking if ${bin} is installed and working"
     if ! command -v "$bin" >/dev/null 2>&1; then
         if [ "$bin" = "virt-customize" ]; then
@@ -72,6 +98,7 @@ require_bin() {
 
 get_lock() {
     require_bin lsof
+
     log_debug "Trying to acquire the lock file"
     exec 9>"$LOCK_FILE" || exit 1
     flock -n 9 || {
@@ -91,7 +118,9 @@ get_lock() {
 
 check_vm() {
     require_bin qm
+
     local vmid="$1"
+
     log_debug "Checking if VM ${vmid} exists"
     if qm status "$vmid" &>/dev/null; then
         log_warn "VM ${vmid} already exists. Removing old VM..."
@@ -103,8 +132,10 @@ check_vm() {
 
 create_vm() {
     require_bin qm
+
     local vmid="$1"
     local name="$2"
+
     check_vm $vmid
     log_info "Creating VM ${vmid} (${name})..."
     qm create "$vmid" \
@@ -125,8 +156,10 @@ create_vm() {
 
 import_disk() {
     require_bin qm
+
     local vmid="$1"
     local image="$2"
+
     log_info "Importing disk..."
     qm importdisk "$vmid" "$image" "$STORAGE"
     log_debug "Initializing disk on SCSI1..."
@@ -138,9 +171,11 @@ import_disk() {
 
 get_template_info() {
     require_bin qm
+
     local mode="$1"
     local vmid="$2"
     local result
+
     log_info "Getting template information for VM ${vmid}..."
     if qm config "$vmid" >/dev/null 2>&1; then
         log_debug "Getting VM description..."
@@ -157,23 +192,28 @@ get_template_info() {
             tag) result="$(echo "$desc" | \
                 grep -Eo 'v?[0-9]+(\.[0-9]+)+'
             )";;
-            *) log_warn "Unsupported get_template_info mode"; return 1;;
+            *) log_warn "Unsupported get_template_info mode: ${mode}"; return 1;;
         esac
         if [ -n "$result" ]; then
-            log_info "Successfully read template info for vm ${vmid}"
+            log_info "Successfully read template info for VM ${vmid}. Extracted data: ${result}"
             printf '%s' "$result"
         else
-            log_debug "Template info is empty"
+            log_warn "Template info is empty"
             echo ""
         fi
     else
-        log_debug "Cannot get VM ${vmid} config details"
-        echo ""
+        log_error "Cannot get VM ${vmid} config details"
+        return 1
     fi
 }
 
 fetch() {
-  curl --silent --show-error --fail "$@"
+    require_bin curl
+    curl -fsSL \
+        "$@" \
+        2> >(while IFS= read -r line; do
+                log_error "$line"
+            done)
 }
 
 ################################# LOGS ########################################
@@ -190,8 +230,10 @@ _log() {
     # UTC timestamps
     # ts="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 
-    # STDOUT
-    printf '[%s] %s\n' "$level" "$msg"
+    # STDERR for console output
+    if [[ "$LOG_TO_CONSOLE" -eq 1 ]]; then
+        printf '[%s] %s\n' "$level" "$msg" >&2
+    fi
 
     # File log
     printf '%s [%s] %s\n' "$ts" "$level" "$msg" >>"$LOG_FILE"
@@ -230,52 +272,42 @@ rotate_logs() {
 ############################### GITHUB ########################################
 
 get_latest_github() {
-    require_bin curl
     local project="$1"
     local data
-    log_info "Getting project ${project} data from GitHub..."
-    data="$(
-        curl --silent --fail-with-body \
-            -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/${project}/releases/latest"
-    )"
-    printf '%s' "$data"
+
+    log_info "Fetching latest GitHub release for ${project}"
+
+    fetch \
+        -H "Accept: application/vnd.github+json" \
+        "https://api.github.com/repos/${project}/releases/latest"
+}
+
+parse_field() {
+    require_bin jq
+    
+    local field="$1"
+    local data="$2"
+
+    jq -er ".${field}" <<<"$data"
 }
 
 get_tag() {
-    require_bin jq
-    local data="$1"
-    local tag
-    log_info "Parsing GitHub data to get latest tag..."
-    tag="$(jq -er '.tag_name' <<<"$data")"
-    log_debug "Latest tag: ${tag}"
+    local tag=$(parse_field tag_name "$1")
+
+    log_info "Latest GitHub release tag: ${tag}"
+
     printf '%s' "$tag"
 }
 
 get_published_at() {
-    require_bin jq
-    local data="$1"
-    local published_at
-    log_info "Parsing GitHub data to get published date..."
-    published_at="$(jq -er '.published_at' <<<"$data")"
-    log_debug "Published date: ${published_at}"
+    local published_at=$(parse_field published_at "$1")
+
+    log_info "Latest GitHub release publish date: ${published_at}"
+
     printf '%s' "$published_at"
 }
 
 ################################ IMAGES #######################################
-
-# dl_image() {
-#     require_bin wget
-#     local image_url="$1"
-#     local hash
-#     local target_path
-#     mkdir -p "$CACHE_DIR"
-#     target_path="${CACHE_DIR%/}/$(basename "$image_url")"
-#     echo "[INFO] Downloading ${image_url}..."
-#     wget -q --show-progress -O "$target_path" "$image_url"
-#     hash="$(get_hash sha512 "$target_path")"
-#     echo "[INFO] SHA512 hashsum: ${hash}"
-# }
 
 dl_image() {
     require_bin wget
@@ -283,28 +315,30 @@ dl_image() {
     local image_url="$1"
     local hash512
     local hash256
-    local target_path
-    local tmp_path
+    local target_path="${CACHE_DIR%/}/$(basename "$image_url")"
+    local tmp_path="${target_path}.tmp.$$"
+    local wget_opts=(
+        --timeout=30
+        --tries=3
+        --read-timeout=30
+        -O "$tmp_path"
+        -q
+    )
 
     mkdir -p "$CACHE_DIR" || {
         log_error "Failed to create cache directory: $CACHE_DIR"
         return 1
     }
 
-    target_path="${CACHE_DIR%/}/$(basename "$image_url")"
-    tmp_path="${target_path}.tmp.$$"
-
-    log_info "Downloading image: ${image_url}"
+    log_info "Image URL: ${image_url}"
     log_debug "Target path: ${target_path}"
     log_debug "Temporary path: ${tmp_path}"
 
-    if ! wget \
-        -q --show-progress \
-        --timeout=30 \
-        --tries=3 \
-        --read-timeout=30 \
-        -O "$tmp_path" "$image_url"
-    then
+    if [[ "${LOG_TO_CONSOLE}" -eq 1 ]]; then
+        wget_opts+=(--show-progress)
+    fi
+
+    if ! wget "${wget_opts[@]}" "$image_url"; then
         log_error "Download failed: ${image_url}"
         log_debug "Removing temporary file: ${tmp_path}"
         rm -f "$tmp_path"
@@ -323,6 +357,8 @@ dl_image() {
         # log_debug "Removing temporary file: ${tmp_path}"
         # rm -f "$tmp_path"
         # return 1
+    else
+        log_info "SHA512 checksum: ${hash512}"
     fi
 
     if ! hash256="$(get_hash sha256 "$tmp_path")"; then
@@ -330,10 +366,9 @@ dl_image() {
         # log_debug "Removing temporary file: ${tmp_path}"
         # rm -f "$tmp_path"
         # return 1
+    else
+        log_info "SHA256 checksum: ${hash256}"
     fi
-
-    log_info "SHA512 checksum: ${hash512}"
-    log_info "SHA256 checksum: ${hash256}"
 
     if ! mv -f "$tmp_path" "$target_path"; then
         log_error "Failed to move file into cache: ${target_path}"
@@ -348,6 +383,7 @@ dl_image() {
 get_hash() {
     local hash_type="$1"
     local file="$2"
+
     log_debug "Creating SHA hash for file ${2}"
     case "$hash_type" in
         sha256) sha256sum "$file" | awk '{print $1}';;
@@ -359,7 +395,9 @@ get_hash() {
 
 inject_qemu() {
     require_bin virt-customize
+
     local image="$1"
+
     log_info "Injecting qemu-guest-agent"
     virt-customize -a "$image" --install qemu-guest-agent
     log_info "Success! qemu-guest-agent was installed into image ${image}"
@@ -368,39 +406,37 @@ inject_qemu() {
 ############################## TEMPLATES ######################################
 
 talos() {
-    require_bin jq
     require_bin xz
+
     local vmid="$1"
     local name="$2"
-    local talos_url
-    local talos_image
+
     local latest_data="$(get_latest_github "siderolabs/talos")"
     local latest_tag="$(get_tag "$latest_data")"
     local latest_date="$(get_published_at "$latest_data")"
     local current_tag="$(get_template_info tag "$vmid")"
-    talos_url="https://factory.talos.dev/image/${TALOS_SCHEMATIC_ID}/${latest_tag}/nocloud-amd64.raw.xz"
-    talos_image="${CACHE_DIR%/}/$(basename "${talos_url%.xz}")"
-    if [[ -z "$latest_data" ]]; then
-        log_error "Failed to fetch latest GitHub release"
+
+    # echo $latest_data
+    # echo $latest_tag
+    # echo $latest_date
+    # echo $current_tag
+
+    if [[ -z "$latest_data" || -z "$latest_tag" ]]; then
+        log_error "Empty latest tag from GitHub. Exiting."
         return 1
-    elif [[ -z "$latest_tag" ]]; then
-        log_error "Failed to parse latest tag"
-        return 1
-    elif [[ -z "$current_tag" ]]; then
-        log_warn "Failed to get current tag"
-    elif [[ "$current_tag" = "$latest_tag" ]]; then
-        log_info "Talos image already up-to-date. Exiting."
+    elif [[ -n "$current_tag" && "$current_tag" == "$latest_tag" ]]; then
+        log_info "Talos image already up-to-date (${latest_tag}). Exiting."
         return 0
     fi
-    log_info "Downloading latest Talos image..."
-    log_debug "Talos URL: ${talos_url}"
-    log_debug "Talos tag: ${latest_tag}"
+
+    local talos_url="https://factory.talos.dev/image/${TALOS_SCHEMATIC_ID}/${latest_tag}/nocloud-amd64.raw.xz"
+    local talos_image="${CACHE_DIR%/}/$(basename "${talos_url%.xz}")"
+
+    log_info "Downloading Talos ${latest_tag} image..."
     dl_image "$talos_url"
     log_debug "Unpacking Talos image..."
     xz -dfk "${CACHE_DIR%/}/$(basename "$talos_url")"
-    log_info "Creating new VM ${name} for Talos template"
     create_vm "$vmid" "$name"
-    log_info "Importing Talos image to VM ${vmid}"
     import_disk "$vmid" "$talos_image"
     log_info "Writing description with Talos image details"
     qm set "$vmid" --description "$(cat <<EOF
@@ -415,23 +451,26 @@ EOF
     rm -f "$talos_image"
 }
 
-ubuntu() {
+# ubuntu() {
 
-}
+# }
 
 ###############################################################################
 
 main() {
     trap 'log_error "Command failed: \"$BASH_COMMAND\" (line $LINENO)"' ERR
     trap 'rm -f "$LOCK_FILE"; log_debug "Lock file removed"' EXIT
+
     get_lock
     rotate_logs
-    log_info "=== pve-templater started (PID $$) ==="    
-#   parse_flags "$@"
-#   log_info "###############################################################################"
-#   log_info "Start time:" __ts
+    # parse_flags "$@"
+
+    check_requirements \
+        curl jq wget qm lsof numfmt logger stat
+
+    log_info "================== pve-templater started (PID $$) =================="
     talos "905" "talos-latest"
-    log_info "=== pve-templater finished successfully ==="
+    log_info "================== pve-templater finished successfully =================="
 }
 
 main "$@"
