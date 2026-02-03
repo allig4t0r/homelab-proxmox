@@ -55,6 +55,7 @@ locals {
     dns_domain                = "ag"
     cpu_units                 = 100
     boot_order                = ["scsi1", "ide2"]
+    serial_enabled            = true
   }
 
   # one tag from here PER VM!
@@ -110,7 +111,7 @@ locals {
         interface = "scsi${regex("\\d+", key)}"
         size      = value
       }
-      if can(regex("^hdd[0-9]+_size$", key)) && value != null
+      if can(regex("^hdd[2-9]+_size$", key)) && value != null
     ]
   }
 }

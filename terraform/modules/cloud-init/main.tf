@@ -199,6 +199,11 @@ resource "proxmox_virtual_environment_vm" "virtual_machines" {
     file_id   = each.value.iso_image != null ? each.value.iso_image : "none"
   }
 
+  dynamic serial_device {
+    for_each = each.value.serial_enabled == true ? [1] : []
+    content {}
+  }
+
   network_device {
     bridge   = each.value.bridge
     firewall = each.value.firewall

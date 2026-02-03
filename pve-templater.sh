@@ -48,7 +48,8 @@ CORES=2
 #             - siderolabs/intel-ucode
 #             - siderolabs/qemu-guest-agent
 #             - siderolabs/util-linux-tools
-TALOS_SCHEMATIC_ID="46d4c1f71ea8a0d5deeb85c27e5f4e9479ae592a532de2856f96926949294324"
+#     bootloader: sd-boot
+TALOS_SCHEMATIC_ID="cfd24ff03f3a694b19911cb656d76636339f25b45ff1f46931095bbaad2ca9e5"
 
 ############################# SYSTEM ##########################################
 
@@ -209,8 +210,7 @@ get_template_info() {
 
 fetch() {
     require_bin curl
-    curl -fsSL \
-        "$@" \
+    curl -fsSL "$@" \
         2> >(while IFS= read -r line; do
                 log_error "$line"
             done)
@@ -273,7 +273,6 @@ rotate_logs() {
 
 get_latest_github() {
     local project="$1"
-    local data
 
     log_info "Fetching latest GitHub release for ${project}"
 
@@ -354,18 +353,18 @@ dl_image() {
 
     if ! hash512="$(get_hash sha512 "$tmp_path")"; then
         log_warn "Failed to calculate SHA512 hash for file: ${tmp_path}"
-        # log_debug "Removing temporary file: ${tmp_path}"
-        # rm -f "$tmp_path"
-        # return 1
+        log_debug "Removing temporary file: ${tmp_path}"
+        rm -f "$tmp_path"
+        return 1
     else
         log_info "SHA512 checksum: ${hash512}"
     fi
 
     if ! hash256="$(get_hash sha256 "$tmp_path")"; then
         log_warn "Failed to calculate SHA256 hash for file: ${tmp_path}"
-        # log_debug "Removing temporary file: ${tmp_path}"
-        # rm -f "$tmp_path"
-        # return 1
+        log_debug "Removing temporary file: ${tmp_path}"
+        rm -f "$tmp_path"
+        return 1
     else
         log_info "SHA256 checksum: ${hash256}"
     fi
@@ -441,7 +440,7 @@ talos() {
     log_info "Writing description with Talos image details"
     qm set "$vmid" --description "$(cat <<EOF
 Talos Linux published at: ${latest_date}  
-Version: *${latest_tag}*  
+Version: **${latest_tag}**  
 Date: $(date +"%a %b %d %H:%M:%S %Z %Y")
 EOF
 )"

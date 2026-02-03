@@ -72,5 +72,6 @@ variable "vms" {
     cpu_units                    = optional(number)
     dns_domain                   = optional(string)
     iso_image                    = optional(string)
+    serial_enabled               = optional(bool)
   }))
 }
