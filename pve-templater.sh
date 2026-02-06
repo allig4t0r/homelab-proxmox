@@ -29,17 +29,21 @@
 
 set -euo pipefail
 
-LOG_TO_CONSOLE=1
+LOG_TO_CONSOLE=0
 LOG_FILE="/var/log/pve-templater.log"
-DEBUG_ENABLED=0  #TODO get value from -v/--verbose?
+DEBUG_ENABLED=0
 LOCK_FILE="/tmp/pve-templater.lock"
 MAX_LOG_SIZE=1048576   # 1MB
 CACHE_DIR="/var/lib/vz/template/images"
+WORK_DIR="/var/tmp/pve-templater"
 STORAGE="nvme"
 MEMORY=2048
 CORES=2
+DEFAULT_DISK_SLOT="scsi1"
+DEFAULT_BOOT_ORDER="scsi1"
+UBUNTU_CODENAME="noble"
 
-# Talos ID for such configuration
+# Talos ID for such configuration, UEFI only
 # customization:
 #     extraKernelArgs:
 #         - console=ttyS0
@@ -56,13 +60,124 @@ TALOS_SCHEMATIC_ID="cfd24ff03f3a694b19911cb656d76636339f25b45ff1f46931095bbaad2c
 display_usage() {
   log_debug "Displaying usage"
   cat <<EOF
-Usage: pve_templater.sh <ubuntu|talos|flatcar> <vm id> [--resize <size>] [--schematic <id>]
+Usage: pve_templater.sh <vm id> <ubuntu|talos|flatcar> <vm name> [--codename <codename>] [--debug] [--resize <size>] [--schematic <id>] [--version <version>]
 
-  --resize     What size template disk should be //TODO?
-  --schematic  If you want to specify Talos schematic ID //TODO
-  --codename   If you want to specify Ubuntu codename //TODO
+  --codename   if you want to specify Ubuntu codename (noble/jammy/plucky/etc), default is noble (24.04 LTS) //TODO
+  --debug, -v  enable DEBUG logging
+  --resize     takes <+|-><size>[K|M|G|T] to change size, i.e. +10G adds 10GB, 10G equals total 10G size
+  --schematic  if you want to specify Talos schematic ID
+  --version    override the latest version check with a specific version (e.g. v1.2.3)
 EOF
 }
+
+parse_flags() {
+    RESIZE_VALUE=""
+    OVERRIDE_VERSION=""
+
+    # Enable console logging only if running interactively
+    if [[ -t 1 && -t 2 ]]; then
+        LOG_TO_CONSOLE=1
+    fi
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -h|--help)
+                display_usage
+                exit 0
+                ;;
+            --codename)
+                [[ -n "${2:-}" ]] || {
+                    log_crit "--codename requires a Ubuntu codename (e.g. noble)"
+                    exit 1
+                }
+                UBUNTU_CODENAME="$2"
+                log_info "Ubuntu codename set to: ${UBUNTU_CODENAME}"
+                shift 2
+                ;;
+            --resize)
+                [[ -n "${2:-}" ]] || {
+                    log_crit "--resize requires a value (e.g. 30G)"
+                    exit 1
+                }
+                RESIZE_VALUE="$2"
+                shift 2
+                ;;
+            --schematic)
+                [[ -n "${2:-}" ]] || {
+                    log_crit "--schematic requires Talos schematic ID"
+                    exit 1
+                }
+                TALOS_SCHEMATIC_ID="$2"
+                log_info "Overriding Talos schematic ID: ${TALOS_SCHEMATIC_ID}"
+                shift 2
+                ;;
+            -v|--debug)
+                DEBUG_ENABLED=1
+                log_info "DEBUG logging mode enabled"
+                shift
+                ;;
+            --version)
+                [[ -n "${2:-}" ]] || {
+                    log_crit "--version requires a value to override the latest version check (e.g. v1.2.3)"
+                    exit 1
+                }
+                OVERRIDE_VERSION="$2"
+                log_info "Version override enabled: ${OVERRIDE_VERSION}"
+                shift 2
+                ;;
+            --*)
+                log_crit "Unknown option: $1"
+                display_usage
+                exit 1
+                ;;
+            *)
+                # Positional arguments (vmid, template name, etc.)
+                POSITIONAL_ARGS+=("$1")
+                shift
+                ;;
+        esac
+    done
+
+    # Restore positional parameters for main()
+    set -- "${POSITIONAL_ARGS[@]}"
+}
+
+dispatch_template() {
+    local vmid="$1"
+    local template="$2"
+    local name="$3"
+
+    [[ -n "$vmid" && -n "$template" && -n "$name" ]] || {
+        log_crit "Usage: <vm id> <template> <name>"
+        display_usage
+        exit 1
+    }
+
+    [[ "$vmid" =~ ^[0-9]+$ ]] || {
+        log_crit "VMID must be numeric: ${vmid}"
+        exit 1
+    }
+
+    log_info "Dispatching template: ${template} (VM ID ${vmid}, name ${name})"
+
+    case "$template" in
+        talos)
+            talos "$vmid" "$name"
+            ;;
+        ubuntu)
+            ubuntu "$vmid" "$name"
+            ;;
+        flatcar)
+            flatcar "$vmid" "$name"
+            ;;
+        *)
+            log_crit "Unknown template: ${template}"
+            display_usage
+            exit 1
+            ;;
+    esac
+}
+
 
 check_requirements() {
     local missing=()
@@ -155,26 +270,88 @@ create_vm() {
     log_info "Successfully created new VM"
 }
 
+prepare_work_image() {    
+    local vmid="$1"
+    local image="$2"
+
+    mkdir -p "$WORK_DIR" || {
+        log_crit "Failed to create work directory: ${WORK_DIR}"
+        return 1
+    }
+
+    local work_image="${WORK_DIR%/}/$(basename "$image").${vmid}.tmp.img"
+
+    log_info "Creating working image copy"
+    cp --reflink=auto "$image" "$work_image" || {
+        log_crit "Failed to create working image"
+        return 1
+    }
+
+    printf '%s' "$work_image"
+}
+
+
+resize_disk() {
+    require_bin qemu-img
+
+    local image="$1"
+    local new_size="$2"
+
+    [[ -f "$image" ]] || {
+        log_crit "resize_disk: image ${image} not found"
+        return 1
+    }
+
+    [[ -n "$new_size" ]] || {
+        log_warn "resize_disk: not resizing disk because new size is empty"
+        return 0
+    }
+
+    log_info "Resizing disk image ${image} to ${new_size}"
+    # add virt-resize? //TODO
+    if ! qemu-img resize "$image" "$new_size"; then
+        log_crit "resize_disk: failed to resize image"
+        return 1
+    fi
+
+    log_info "Disk was successfully resized"
+}
+
 import_disk() {
     require_bin qm
 
     local vmid="$1"
     local image="$2"
 
-    log_info "Importing disk..."
+    [[ -f "$image" ]] || {
+        log_crit "Disk image not found: ${image}"
+        return 1
+    }
+
+    if [[ -n "$RESIZE_VALUE" ]]; then
+        local work_image="$(prepare_work_image "$vmid" "$image")"
+    fi
+
+    log_info "Importing disk into VM ${vmid}"
     qm importdisk "$vmid" "$image" "$STORAGE"
-    log_debug "Initializing disk on SCSI1..."
+    log_debug "Attaching disk and setting boot order"
     qm set "$vmid" \
-        --scsi1 "${STORAGE}:vm-${vmid}-disk-1,iothread=1,discard=on,ssd=1" \
-        --boot order=scsi1
+        --"${DEFAULT_DISK_SLOT}" "${STORAGE}:vm-${vmid}-disk-1,iothread=1,discard=on,ssd=1" \
+        --boot order="${DEFAULT_BOOT_ORDER}"
+
     log_info "Disk was successfully imported"
+
+    if [[ -n "$work_image" ]]; then
+        log_debug "Removing working image ${work_image}"
+        rm -f "$work_image"
+    fi
 }
 
 get_template_info() {
     require_bin qm
 
-    local mode="$1"
-    local vmid="$2"
+    local vmid="$1"
+    local mode="$2"
     local result
 
     log_info "Getting template information for VM ${vmid}..."
@@ -405,33 +582,47 @@ inject_qemu() {
 ############################## TEMPLATES ######################################
 
 talos() {
+    ###
+    # talos()
+    # └── import_disk()
+    #     ├── prepare_work_image()
+    #     ├── resize_disk()
+    #     ├── qm importdisk
+    #     └── cleanup
+    ###
     require_bin xz
 
     local vmid="$1"
     local name="$2"
+    local required_tag
 
-    local latest_data="$(get_latest_github "siderolabs/talos")"
-    local latest_tag="$(get_tag "$latest_data")"
-    local latest_date="$(get_published_at "$latest_data")"
-    local current_tag="$(get_template_info tag "$vmid")"
+    local current_tag="$(get_template_info "$vmid" tag)"
 
-    # echo $latest_data
-    # echo $latest_tag
-    # echo $latest_date
-    # echo $current_tag
+    if [[ -n "$OVERRIDE_VERSION" ]]; then
+        required_tag="$OVERRIDE_VERSION"
+    else
+        local latest_data="$(get_latest_github "siderolabs/talos")"
+        required_tag="$(get_tag "$latest_data")"
+        local latest_date="$(get_published_at "$latest_data")"
+    fi
 
-    if [[ -z "$latest_data" || -z "$latest_tag" ]]; then
+    if [[ -z "$required_tag" ]]; then
         log_error "Empty latest tag from GitHub. Exiting."
         return 1
-    elif [[ -n "$current_tag" && "$current_tag" == "$latest_tag" ]]; then
-        log_info "Talos image already up-to-date (${latest_tag}). Exiting."
+    elif [[ -n "$current_tag" && "$current_tag" == "$required_tag" ]]; then
+        log_info "Talos image already up-to-date (${current_tag}). Exiting."
         return 0
     fi
 
-    local talos_url="https://factory.talos.dev/image/${TALOS_SCHEMATIC_ID}/${latest_tag}/nocloud-amd64.raw.xz"
+    # echo $latest_data
+    # echo $required_tag
+    # echo $latest_date
+    # echo $current_tag
+
+    local talos_url="https://factory.talos.dev/image/${TALOS_SCHEMATIC_ID}/${required_tag}/nocloud-amd64.raw.xz"
     local talos_image="${CACHE_DIR%/}/$(basename "${talos_url%.xz}")"
 
-    log_info "Downloading Talos ${latest_tag} image..."
+    log_info "Downloading Talos ${required_tag} image..."
     dl_image "$talos_url"
     log_debug "Unpacking Talos image..."
     xz -dfk "${CACHE_DIR%/}/$(basename "$talos_url")"
@@ -440,7 +631,7 @@ talos() {
     log_info "Writing description with Talos image details"
     qm set "$vmid" --description "$(cat <<EOF
 Talos Linux published at: ${latest_date}  
-Version: **${latest_tag}**  
+Version: **${required_tag}**  
 Date: $(date +"%a %b %d %H:%M:%S %Z %Y")
 EOF
 )"
@@ -460,15 +651,34 @@ main() {
     trap 'log_error "Command failed: \"$BASH_COMMAND\" (line $LINENO)"' ERR
     trap 'rm -f "$LOCK_FILE"; log_debug "Lock file removed"' EXIT
 
+    # Parse CLI flags and positional arguments
+    parse_flags "$@"
+
     get_lock
     rotate_logs
-    # parse_flags "$@"
 
     check_requirements \
         curl jq wget qm lsof numfmt logger stat
 
     log_info "================== pve-templater started (PID $$) =================="
-    talos "905" "talos-latest"
+
+    if [[ $# -eq 0 ]]; then
+        # -------------------------------
+        # Batch / cron mode
+        # -------------------------------
+        log_info "Running in batch mode (no CLI parameters)"
+        log_info "For help and usage instructions, run with -h or --help flag"
+
+        # ubuntu  "910" "ubuntu-latest"
+        # flatcar "901" "flatcar-latest"
+        # talos   "905" "talos-latest"
+    else
+        # -------------------------------
+        # CLI / dispatch mode
+        # -------------------------------
+        dispatch_template "$@"
+    fi
+
     log_info "================== pve-templater finished successfully =================="
 }
 
