@@ -38,6 +38,7 @@ variable "vms" {
   type = map(object({
     hostname                     = string
     ip_address                   = string
+    ip_mask                      = string
     vm_template_id               = number
     cpu_cores                    = number
     cpu_sockets                  = number

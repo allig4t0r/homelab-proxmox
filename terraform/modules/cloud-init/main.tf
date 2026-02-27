@@ -8,7 +8,7 @@ resource "local_file" "cloud_init_user_file" {
   filename = "${path.module}/generated/cloud_init_user_${each.value.hostname}.yaml"
   content = templatefile("${path.module}/templates/${each.value.vm_template_id != null ? each.value.vm_template_id : 910}_user.tftpl", {
     hostname                        = each.value.hostname
-    ip_address                      = each.value.ip_address //for flatcar ignition
+    ip_address                      = "${each.value.ip_address}${each.value.ip_mask}" //for flatcar ignition
     gateway                         = each.value.gateway
     dns                             = each.value.dns
     root_ssh_pub_key                = var.root_ssh_pub_key
@@ -26,7 +26,7 @@ resource "local_file" "cloud_init_network_file" {
   filename = "${path.module}/generated/cloud_init_network_${each.value.hostname}.yaml"
   content = templatefile("${path.module}/templates/${each.value.vm_template_id != null ? each.value.vm_template_id : 910}_network.tftpl", {
     hostname                = each.value.hostname
-    ip_address              = each.value.ip_address
+    ip_address              = "${each.value.ip_address}${each.value.ip_mask}"
     gateway                 = each.value.gateway
     dns                     = each.value.dns
   })
@@ -152,7 +152,7 @@ resource "proxmox_virtual_environment_vm" "virtual_machines" {
       for_each = each.value.cloud_config_network_enabled == true ? [] : [1]
       content {
         ipv4 {
-          address = each.value.ip_address
+          address = "${each.value.ip_address}${each.value.ip_mask}"
           gateway = each.value.ip_address == "dhcp" ? null : each.value.gateway
         }
       }
