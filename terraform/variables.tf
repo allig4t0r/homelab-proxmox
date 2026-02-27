@@ -1,5 +1,5 @@
 variable "proxmox_host" {
-  default = "10.100.52.11"
+  default = "172.17.4.44"
 }
 
 # variable "proxmox_host_ipv4_addrs" {
@@ -43,8 +43,9 @@ locals {
     scsihw                    = "virtio-scsi-single"
     hdd_storage               = "nvme"
     hdd_size                  = 30
-    dns                       = ["10.100.52.2"]
-    gateway                   = "10.100.52.1"
+    ip_mask                   = "/24"
+    dns                       = ["172.17.0.2"]
+    gateway                   = "172.17.4.1"
     bridge                    = "vmbr0"
     firewall                  = false
     cloud_config_user_enabled = true
@@ -125,19 +126,19 @@ variable vms {
     "haproxy" = {
       hostname           = "haproxy"
       cpu_sockets        = 2
-      ip_address         = "10.100.52.100/24"
+      ip_address         = "172.17.4.100"
       tags               = ["terraform", "ubuntu", "haproxy"]
     }
 
     "flatcar01" = {
       hostname           = "flatcar01"
-      ip_address         = "10.100.52.105/24"
+      ip_address         = "172.17.4.105"
       tags               = ["terraform", "k8s", "flatcar"]
     }
 
     "talos01" = {
       hostname           = "talos01"
-      ip_address         = "10.100.52.55/24"
+      ip_address         = "172.17.4.55"
       tags               = ["terraform", "k8s", "talos"]
     }
   }
