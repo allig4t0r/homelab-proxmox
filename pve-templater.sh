@@ -19,19 +19,17 @@
 # 
 # Preferred way of using the script with multiple templates is to run all template functions in main():
 #        main() {
-#                # -------------------------------
-#                # Batch / cron mode
-#                # -------------------------------
-#                log_info "Running in batch mode (no CLI parameters)"
-#                if [[ $LOG_TO_CONSOLE -eq 1 ]]; then
-#                    echo "For help and usage instructions, run with -h or --help flag"
-#                fi
+#            <..>
+#            log_info "================== pve-templater started (PID $$) =================="
 #
+#            if [[ $# -eq 0 ]]; then
+#                log_info "Running in batch mode (no CLI parameters)"
+#                if [[ $LOG_TO_CONSOLE -eq 1 ]]; then log_info "For help and usage instructions, run with -h or --help flag"; fi
+#                # Put your batch mode templates here
 #                # provider_ubuntu  "910" "ubuntu-latest"
 #                # provider_flatcar "901" "flatcar-latest"
 #                # provider_talos   "905" "talos-latest"
-#            else
-#        }
+#                # Batch mode end
 
 set -euo pipefail
 
@@ -76,8 +74,6 @@ cleanup() {
         rm -f "${CLEANUP_FILES[@]}"
     fi
 
-    # 2. Aggressive but strict failsafe cleanup for any orphaned .tmp.<PID> files
-    # The regex \.tmp\.[0-9]+$ matches our temporary download and resize logic 
     if [[ -d "$CACHE_DIR" ]]; then
         log_debug "Searching for orphaned .tmp.<PID> files in CACHE_DIR"
         find "$CACHE_DIR" -type f -regex ".*\.tmp\.[0-9]+$" -exec rm -f {} + 2>/dev/null || true
@@ -527,6 +523,11 @@ main() {
     if [[ $# -eq 0 ]]; then
         log_info "Running in batch mode (no CLI parameters)"
         if [[ $LOG_TO_CONSOLE -eq 1 ]]; then log_info "For help and usage instructions, run with -h or --help flag"; fi
+        # Put your batch mode templates here
+        # provider_ubuntu  "910" "ubuntu-latest"
+        # provider_flatcar "901" "flatcar-latest"
+        # provider_talos   "905" "talos-latest"
+        # Batch mode end
     else
         dispatch_template "${POSITIONAL_ARGS[@]}"
     fi
