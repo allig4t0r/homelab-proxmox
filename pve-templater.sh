@@ -40,6 +40,7 @@ LOG_FILE="/var/log/pve-templater.log"
 DEBUG_ENABLED=0
 LOCK_FILE="/tmp/pve-templater.lock"
 MAX_LOG_SIZE=1048576   # 1MB
+FORCE_DOWNLOAD=0
 CACHE_DIR="/var/lib/vz/template/images"
 WORK_DIR="/var/tmp/pve-templater"
 STORAGE="nvme"
@@ -48,6 +49,7 @@ CORES=2
 DEFAULT_DISK_SLOT="scsi1"
 DEFAULT_BOOT_ORDER="scsi1"
 UBUNTU_CODENAME="noble"
+SOCKS5_PROXY="172.17.0.22:1080"
 
 # Global array to track files for cleanup on exit
 CLEANUP_FILES=()
@@ -106,6 +108,7 @@ sys_require_bin() {
 
 sys_check_requirements() {
     local missing=()
+    log_debug "Checking script requirements"
     for bin in "$@"; do
         command -v "$bin" >/dev/null 2>&1 || missing+=("$bin")
     done
@@ -149,6 +152,7 @@ Options:
   --debug, -v  enable DEBUG logging
   --resize     takes <+|-><size>[K|M|G|T] to change size, i.e. +10G adds 10GB, 10G equals total 10G size
   --schematic  if you want to specify Talos schematic ID
+  --force      forces image download and template creation
   --version    override the latest version check with a specific version (e.g. v1.2.3)
 EOF
 }
@@ -159,12 +163,15 @@ parse_flags() {
 
     if [[ -t 1 && -t 2 ]]; then
         LOG_TO_CONSOLE=1
+    else
+        PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
     fi
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
             -h|--help) display_usage; exit 0 ;;
             --codename) UBUNTU_CODENAME="${2:-}"; shift 2 ;;
+            --force) FORCE_DOWNLOAD=1; shift ;;
             --resize) RESIZE_VALUE="${2:-}"; shift 2 ;;
             --schematic) TALOS_SCHEMATIC_ID="${2:-}"; shift 2 ;;
             -v|--debug) DEBUG_ENABLED=1; shift ;;
@@ -213,7 +220,8 @@ log_crit()    { _log CRIT    crit    "$@"; }
 
 log_rotate() {
     if [[ -f "$LOG_FILE" ]]; then
-        local size=$(stat -c%s "$LOG_FILE")
+        local size
+        size=$(stat -c%s "$LOG_FILE")
         if (( size > "$MAX_LOG_SIZE" )); then
             mv "$LOG_FILE" "${LOG_FILE}.$(date -u +%Y%m%d%H%M%S)"
             touch "$LOG_FILE"
@@ -230,7 +238,8 @@ sys_fetch() {
 
 sys_get_latest_github_release() {
     local project="$1" field="$2"
-    sys_require_bin jq
+    # sys_require_bin jq
+    log_debug "Fetching Github latest data: project ${project} field ${field}"
     sys_fetch -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${project}/releases/latest" | jq -er ".${field}"
 }
 
@@ -244,28 +253,49 @@ sys_compute_hash() {
 }
 
 sys_download_file() {
-    sys_require_bin wget
-    local image_url="$1" expected_hash="${2:-}" hash_type="${3:-sha256}"
+    # sys_require_bin wget
+    local image_url="$1" tool="${2:-wget}" expected_hash="${3:-}" hash_type="${4:-sha256}" 
     local target_path="${CACHE_DIR%/}/$(basename "$image_url")"
     local tmp_path="${target_path}.tmp.$$"
     local wget_opts=(--timeout=30 --tries=3 --read-timeout=30 -O "$tmp_path" -q)
+    local curl_opts=(-fSL -x socks5h://"${SOCKS5_PROXY}" -o "$tmp_path")
+    local download_success=0
 
     # Register the temp file for automatic cleanup if the script is interrupted
     CLEANUP_FILES+=("$tmp_path")
 
     mkdir -p "$CACHE_DIR" || { log_error "Failed to create cache dir: $CACHE_DIR"; return 1; }
-    if [[ "${LOG_TO_CONSOLE}" -eq 1 ]]; then wget_opts+=(--show-progress); fi
+    [[ "$LOG_TO_CONSOLE" -eq 1 ]] && { wget_opts+=(--show-progress); curl_opts+=(--progress-bar); } || curl_opts+=(--silent)
 
-    log_info "Downloading: ${image_url}"
-    if ! wget "${wget_opts[@]}" "$image_url"; then
-        log_error "Download failed: ${image_url}"; rm -f "$tmp_path"; return 1
+    log_info "Downloading: ${image_url} using ${tool}"
+    
+    if [[ "$tool" == "curl" ]]; then
+        log_debug "curl opts: ${curl_opts[*]}"
+
+        if curl "${curl_opts[@]}" "$image_url"; then
+            download_success=1
+        fi
+    else
+        log_debug "wget opts: ${wget_opts[*]}"
+
+        if wget "${wget_opts[@]}" "$image_url"; then
+            download_success=1
+        fi
     fi
+
+    if [[ $download_success -eq 0 ]]; then
+        log_error "Download failed: ${image_url}"
+        rm -f "$tmp_path"
+        return 1
+    fi    
+    
     if [ ! -s "$tmp_path" ]; then
         log_error "Downloaded file is empty"; rm -f "$tmp_path"; return 1
     fi
 
     if [[ -n "$expected_hash" ]]; then
-        local actual_hash="$(sys_compute_hash "$hash_type" "$tmp_path")"
+        local actual_hash
+        actual_hash="$(sys_compute_hash "$hash_type" "$tmp_path")"
         if [[ "$actual_hash" != "$expected_hash" ]]; then
             log_error "Hash mismatch! Expected: $expected_hash, Got: $actual_hash"
             rm -f "$tmp_path"; return 1
@@ -297,7 +327,7 @@ img_resize() {
 ############################# PVE API #########################################
 
 pve_get_metadata() {
-    sys_require_bin qm
+    # sys_require_bin qm
     local vmid="$1" search_key="$2"
     if qm config "$vmid" >/dev/null 2>&1; then
         if [[ "$search_key" == "hash" ]]; then
@@ -310,6 +340,7 @@ pve_get_metadata() {
 
 pve_is_template_outdated() {
     local vmid="$1" expected_value="$2" search_key="$3"
+    if [[ "$FORCE_DOWNLOAD" -eq 1 ]]; then return 0; fi # "Outdated" if --force
     local current_value="$(pve_get_metadata "$vmid" "$search_key")"
     if [[ -z "$expected_value" ]]; then return 0; fi # Outdated if no expected
     if [[ -n "$current_value" && "$current_value" == "$expected_value" ]]; then
@@ -319,7 +350,7 @@ pve_is_template_outdated() {
 }
 
 pve_create_vm() {
-    sys_require_bin qm
+    # sys_require_bin qm
     local vmid="$1" name="$2"
     if qm status "$vmid" &>/dev/null; then
         log_warn "VM ${vmid} already exists. Removing old VM..."
@@ -333,7 +364,7 @@ pve_create_vm() {
 }
 
 pve_import_disk() {
-    sys_require_bin qm
+    # sys_require_bin qm
     local vmid="$1" image="$2"
     log_info "Importing disk into VM ${vmid}"
     qm importdisk "$vmid" "$image" "$STORAGE"
@@ -359,25 +390,28 @@ pve_build_template() {
 
 provider_talos() {
     sys_require_bin xz
-    local vmid="$1" name="$2" required_tag latest_date
+    local vmid="$1" name="$2" talos_version latest_date xz_file
 
     if [[ -n "$OVERRIDE_VERSION" ]]; then
-        required_tag="$OVERRIDE_VERSION"
-        latest_date=""
+        talos_version="$OVERRIDE_VERSION"
+        latest_date="N/A"
     else
-        required_tag="$(sys_get_latest_github_release "siderolabs/talos" "tag_name")"
+        log_info "Fetching Talos latest version"
+        talos_version="$(sys_get_latest_github_release "siderolabs/talos" "tag_name")"
         latest_date="$(sys_get_latest_github_release "siderolabs/talos" "published_at")"
     fi
 
-    if [[ -z "$required_tag" ]]; then log_error "Empty tag, cannot download. Exiting."; return 1; fi
+    if [[ -z "$talos_version" ]]; then log_error "Empty tag, cannot download. Exiting."; return 1; fi
     
-    if ! pve_is_template_outdated "$vmid" "$required_tag" "tag"; then
-        log_info "Talos image already up-to-date (${required_tag}). Exiting."
+    if ! pve_is_template_outdated "$vmid" "$talos_version" "tag"; then
+        log_info "Talos image already up-to-date (${talos_version}). Exiting."
         return 0
     fi
 
-    local talos_url="https://factory.talos.dev/image/${TALOS_SCHEMATIC_ID}/${required_tag}/nocloud-amd64.raw.xz"
-    local xz_file="$(sys_download_file "$talos_url")"
+    log_info "Upstream Talos version: ${talos_version}"
+
+    local talos_url="https://factory.talos.dev/image/${TALOS_SCHEMATIC_ID}/${talos_version}/nocloud-amd64.raw.xz"
+    xz_file="$(sys_download_file "$talos_url" "curl")"
     
     local raw_img="${WORK_DIR}/talos_${vmid}.raw"
     mkdir -p "$WORK_DIR"
@@ -388,7 +422,7 @@ provider_talos() {
 
     local desc="$(cat <<EOF
 Talos Linux published at: ${latest_date}  
-Version: **${required_tag}**  
+Version: **${talos_version}**  
 Date: **$(date -Is)**  
 EOF
 )"
@@ -399,13 +433,14 @@ EOF
 }
 
 provider_ubuntu() {
-    local vmid="$1" name="$2" codename="$UBUNTU_CODENAME"
+    local vmid="$1" name="$2" codename="$UBUNTU_CODENAME" remote_hash cached_image image_date
     local image_name="${codename}-server-cloudimg-amd64.img"
     local image_url="https://cloud-images.ubuntu.com/${codename}/current/${image_name}"
     local checksum_url="https://cloud-images.ubuntu.com/${codename}/current/SHA256SUMS"
 
     log_info "Preparing Ubuntu template (${codename})"
-    local remote_hash="$(sys_fetch "$checksum_url" | awk "/${image_name}$/ {print \$1}")"
+    log_info "Fetching Ubuntu checksums"
+    remote_hash="$(sys_fetch "$checksum_url" | awk "/${image_name}$/ {print \$1}")"
 
     if [[ -z "$remote_hash" ]]; then log_error "Failed to obtain upstream SHA256"; return 1; fi
 
@@ -414,8 +449,10 @@ provider_ubuntu() {
         return 0
     fi
 
-    local cached_image="$(sys_download_file "$image_url" "$remote_hash" "sha256")"
-    local image_date="$(sys_fetch -I "$image_url" | awk -F': ' 'tolower($1)=="last-modified" {print $2}' | tr -d '\r')"
+    log_info "Upstream Ubuntu SHA256: ${remote_hash}"
+
+    cached_image="$(sys_download_file "$image_url" "wget" "$remote_hash" "sha256")"
+    image_date="$(sys_fetch -I "$image_url" | awk -F': ' 'tolower($1)=="last-modified" {print $2}' | tr -d '\r')"
     image_date="$(date -d "$image_date" +%Y-%m-%d 2>/dev/null || echo "${image_date:-Unknown}")"
 
     mkdir -p "$WORK_DIR"
@@ -446,7 +483,7 @@ provider_flatcar() {
     local base_url="https://stable.release.flatcar-linux.net/amd64-usr/current"
     local version_url="${base_url}/version.txt"
     
-    log_info "Fetching Flatcar version info"
+    log_info "Fetching Flatcar latest version"
     local version_info
     version_info="$(sys_fetch "$version_url" || true)"
 
@@ -460,13 +497,13 @@ provider_flatcar() {
         log_error "Failed to obtain Flatcar version"
         return 1
     fi
-    
-    log_info "Upstream Flatcar Version: ${flatcar_version}"
 
     if ! pve_is_template_outdated "$vmid" "$flatcar_version" "tag"; then
         log_info "Flatcar image already up-to-date (${flatcar_version}). Exiting."
         return 0
     fi
+
+    log_info "Upstream Flatcar version: ${flatcar_version}"
 
     local img_name="flatcar_production_proxmoxve_image.img"
     local img_url="${base_url}/${img_name}"
@@ -483,7 +520,7 @@ provider_flatcar() {
 
     log_info "Downloading Flatcar ${flatcar_version} Proxmox VE image..."
     local cached_image
-    cached_image="$(sys_download_file "$img_url" "$remote_hash" "sha512")"
+    cached_image="$(sys_download_file "$img_url" "curl" "$remote_hash" "sha512")"
 
     mkdir -p "$WORK_DIR"
     local work_image="${WORK_DIR}/${vmid}_${img_name}"
@@ -524,9 +561,9 @@ main() {
         log_info "Running in batch mode (no CLI parameters)"
         if [[ $LOG_TO_CONSOLE -eq 1 ]]; then log_info "For help and usage instructions, run with -h or --help flag"; fi
         # Put your batch mode templates here
-        # provider_ubuntu  "910" "ubuntu-latest"
-        # provider_flatcar "901" "flatcar-latest"
-        # provider_talos   "905" "talos-latest"
+        provider_ubuntu  "910" "ubuntu-latest"
+        provider_flatcar "904" "flatcar-latest"
+        provider_talos   "905" "talos-latest"
         # Batch mode end
     else
         dispatch_template "${POSITIONAL_ARGS[@]}"
