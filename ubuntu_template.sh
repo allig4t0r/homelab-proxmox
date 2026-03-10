@@ -18,6 +18,7 @@ STORAGE="nvme"
 MEMORY=2048
 CPUS=2
 CACHE_DIR="/root/templates"
+DISK_SIZE="30G"
 
 IMG_URL="https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
 IMG_FILE="${CACHE_DIR}/noble-server-cloudimg-amd64.img"
@@ -70,7 +71,7 @@ virt-customize -a "$RESIZED_IMG" --install qemu-guest-agent
 
 # --- Resize image to 30G ---
 echo "[INFO] Resizing image to 30G..."
-qemu-img resize "$RESIZED_IMG" 30G
+qemu-img resize "$RESIZED_IMG" "${DISK_SIZE}"
 
 # --- If VM already exists, remove it ---
 if qm status "$VMID" &>/dev/null; then
