@@ -267,7 +267,7 @@ sys_download_file() {
     mkdir -p "$CACHE_DIR" || { log_error "Failed to create cache dir: $CACHE_DIR"; return 1; }
     [[ "$LOG_TO_CONSOLE" -eq 1 ]] && { wget_opts+=(--show-progress); curl_opts+=(--progress-bar); } || curl_opts+=(--silent)
 
-    log_info "Downloading: ${image_url} using ${tool}"
+    log_info "URL: ${image_url} using ${tool}"
     
     if [[ "$tool" == "curl" ]]; then
         log_debug "curl opts: ${curl_opts[*]}"
@@ -421,7 +421,7 @@ provider_talos() {
     xz -dfk "$xz_file" -c > "$raw_img"
 
     local desc="$(cat <<EOF
-Talos Linux published at: ${latest_date}  
+Talos Linux published at: **${latest_date}**  
 Version: **${talos_version}**  
 Date: **$(date -Is)**  
 EOF
