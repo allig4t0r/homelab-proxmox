@@ -48,7 +48,6 @@ MEMORY=2048
 CORES=2
 DEFAULT_DISK_SLOT="scsi1"
 DEFAULT_BOOT_ORDER="scsi1"
-UBUNTU_CODENAME="noble"
 SOCKS5_PROXY="172.17.0.22:1080"
 
 # Global array to track files for cleanup on exit
@@ -148,7 +147,7 @@ EOF
   cat <<EOF
 
 Options:
-  --codename   if you want to specify Ubuntu codename (noble/jammy/plucky/etc), default is noble (24.04 LTS)
+  --codename   if you want to specify OS release codename (Ubuntu: noble/jammy/etc, Debian: trixie/bookworm/etc)
   --debug, -v  enable DEBUG logging
   --resize     takes <+|-><size>[K|M|G|T] to change size, i.e. +10G adds 10GB, 10G equals total 10G size
   --schematic  if you want to specify Talos schematic ID
@@ -160,6 +159,7 @@ EOF
 parse_flags() {
     RESIZE_VALUE=""
     OVERRIDE_VERSION=""
+    OS_CODENAME=""
 
     if [[ -t 1 && -t 2 ]]; then
         LOG_TO_CONSOLE=1
@@ -170,7 +170,7 @@ parse_flags() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
             -h|--help) display_usage; exit 0 ;;
-            --codename) UBUNTU_CODENAME="${2:-}"; shift 2 ;;
+            --codename) OS_CODENAME="${2:-}"; shift 2 ;;
             --force) FORCE_DOWNLOAD=1; shift ;;
             --resize) RESIZE_VALUE="${2:-}"; shift 2 ;;
             --schematic) TALOS_SCHEMATIC_ID="${2:-}"; shift 2 ;;
@@ -341,8 +341,8 @@ pve_get_metadata() {
 pve_is_template_outdated() {
     local vmid="$1" expected_value="$2" search_key="$3"
     if [[ "$FORCE_DOWNLOAD" -eq 1 ]]; then return 0; fi # "Outdated" if --force
+    if [[ -z "$expected_value" ]]; then return 0; fi # "Outdated" if expected value is empty
     local current_value="$(pve_get_metadata "$vmid" "$search_key")"
-    if [[ -z "$expected_value" ]]; then return 0; fi # Outdated if no expected
     if [[ -n "$current_value" && "$current_value" == "$expected_value" ]]; then
         return 1 # False (Not outdated)
     fi
@@ -401,7 +401,7 @@ provider_talos() {
         latest_date="$(sys_get_latest_github_release "siderolabs/talos" "published_at")"
     fi
 
-    if [[ -z "$talos_version" ]]; then log_error "Empty tag, cannot download. Exiting."; return 1; fi
+    if [[ -z "$talos_version" ]]; then log_error "Failed to obtain latest upstream tag. Exiting."; return 1; fi
     
     if ! pve_is_template_outdated "$vmid" "$talos_version" "tag"; then
         log_info "Talos image already up-to-date (${talos_version}). Exiting."
@@ -433,7 +433,8 @@ EOF
 }
 
 provider_ubuntu() {
-    local vmid="$1" name="$2" codename="$UBUNTU_CODENAME" remote_hash cached_image image_date
+    local vmid="$1" name="$2" remote_hash cached_image image_date
+    local codename="${OS_CODENAME:-noble}"
     local image_name="${codename}-server-cloudimg-amd64.img"
     local image_url="https://cloud-images.ubuntu.com/${codename}/current/${image_name}"
     local checksum_url="https://cloud-images.ubuntu.com/${codename}/current/SHA256SUMS"
@@ -442,7 +443,7 @@ provider_ubuntu() {
     log_info "Fetching Ubuntu checksums"
     remote_hash="$(sys_fetch "$checksum_url" | awk "/${image_name}$/ {print \$1}")"
 
-    if [[ -z "$remote_hash" ]]; then log_error "Failed to obtain upstream SHA256"; return 1; fi
+    if [[ -z "$remote_hash" ]]; then log_error "Failed to obtain latest upstream Ubuntu SHA256 from ${checksum_url}"; return 1; fi
 
     if ! pve_is_template_outdated "$vmid" "$remote_hash" "hash"; then
         log_info "Ubuntu image already up-to-date (${remote_hash}). Exiting."
@@ -479,22 +480,17 @@ EOF
 
 provider_flatcar() {
     local vmid="$1" name="$2"
-
     local base_url="https://stable.release.flatcar-linux.net/amd64-usr/current"
     local version_url="${base_url}/version.txt"
+    local version_info flatcar_version flatcar_build_id
     
     log_info "Fetching Flatcar latest version"
-    local version_info
     version_info="$(sys_fetch "$version_url" || true)"
-
-    local flatcar_version
     flatcar_version="$(echo "$version_info" | grep '^FLATCAR_VERSION=' | cut -d= -f2 || true)"
-    
-    local flatcar_build_id
     flatcar_build_id="$(echo "$version_info" | grep '^FLATCAR_BUILD_ID=' | cut -d= -f2 | tr -d '"' || true)"
     
     if [[ -z "$flatcar_version" ]]; then
-        log_error "Failed to obtain Flatcar version"
+        log_error "Failed to obtain Flatcar latest version"
         return 1
     fi
 
@@ -505,9 +501,9 @@ provider_flatcar() {
 
     log_info "Upstream Flatcar version: ${flatcar_version}"
 
-    local img_name="flatcar_production_proxmoxve_image.img"
-    local img_url="${base_url}/${img_name}"
-    local digests_url="${img_url}.DIGESTS"
+    local image_name="flatcar_production_proxmoxve_image.img"
+    local image_url="${base_url}/${image_name}"
+    local digests_url="${image_url}.DIGESTS"
 
     log_info "Fetching Flatcar SHA512 hash"
     local remote_hash
@@ -520,10 +516,10 @@ provider_flatcar() {
 
     log_info "Downloading Flatcar ${flatcar_version} Proxmox VE image..."
     local cached_image
-    cached_image="$(sys_download_file "$img_url" "curl" "$remote_hash" "sha512")"
+    cached_image="$(sys_download_file "$image_url" "curl" "$remote_hash" "sha512")"
 
     mkdir -p "$WORK_DIR"
-    local work_image="${WORK_DIR}/${vmid}_${img_name}"
+    local work_image="${WORK_DIR}/${vmid}_${image_name}"
     CLEANUP_FILES+=("$work_image")
     
     log_info "Creating working copy of image..."
@@ -542,6 +538,66 @@ EOF
     pve_build_template "$vmid" "$name" "$work_image" "$desc" "${RESIZE_VALUE}"
 
     log_info "Flatcar template ${name} (${vmid}) successfully created"
+}
+
+provider_debian() {
+    local vmid="$1" name="$2"
+    local codename="${OS_CODENAME:-trixie}"
+    local base_url="https://cloud.debian.org/images/cloud/${codename}/latest"
+    local checksum_url="${base_url}/SHA512SUMS"
+    local remote_hash image_name image_url cached_image image_date checksums_content
+
+    log_info "Preparing Debian (${codename}) template"
+    log_info "Fetching Debian checksums"
+    
+    checksums_content="$(sys_fetch "$checksum_url")"
+    if [[ -z "$checksums_content" ]]; then
+        log_error "Failed to fetch checksums from ${checksum_url}"
+        return 1
+    fi
+
+    image_name="$(echo "$checksums_content" | awk '/generic-amd64\.qcow2$/ {print $2}')"
+    remote_hash="$(echo "$checksums_content" | awk "/${image_name}$/ {print \$1}")"
+
+    if [[ -z "$image_name" ]] || [[ -z "$remote_hash" ]]; then
+        log_error "Failed to obtain upstream image name or SHA512 hash"
+        return 1
+    fi
+
+    image_url="${base_url}/${image_name}"
+
+    if ! pve_is_template_outdated "$vmid" "$remote_hash" "hash"; then
+        log_info "Debian image already up-to-date (${remote_hash}). Exiting."
+        return 0
+    fi
+
+    log_info "Upstream Debian SHA512: ${remote_hash}"
+
+    cached_image="$(sys_download_file "$image_url" "wget" "$remote_hash" "sha512")"
+    
+    image_date="$(sys_fetch -I "$image_url" | awk -F': ' 'tolower($1)=="last-modified" {print $2}' | tr -d '\r')"
+    image_date="$(date -d "$image_date" +%Y-%m-%d 2>/dev/null || echo "${image_date:-Unknown}")"
+
+    mkdir -p "$WORK_DIR"
+    local work_image="${WORK_DIR}/${vmid}_${image_name}"
+    CLEANUP_FILES+=("$work_image")
+    
+    log_info "Creating working copy of image..."
+    cp --reflink=auto "$cached_image" "$work_image"
+    
+    img_inject_qga "$work_image"
+
+    local desc="$(cat <<EOF
+Debian **${codename^}** Cloud Image  
+Build date: **${image_date}**  
+Checksum (SHA512): **${remote_hash}**  
+Date: **$(date -Is)**  
+EOF
+)"
+    
+    pve_build_template "$vmid" "$name" "$work_image" "$desc" "${RESIZE_VALUE}"
+
+    log_info "Debian template ${name} (${vmid}) successfully created"
 }
 
 ############################# MAIN ############################################
@@ -564,6 +620,7 @@ main() {
         # provider_ubuntu  "910" "ubuntu-latest"
         # provider_flatcar "904" "flatcar-latest"
         # provider_talos   "905" "talos-latest"
+        # provider_debian  "902" "debian-latest"
         # Batch mode end
     else
         dispatch_template "${POSITIONAL_ARGS[@]}"
