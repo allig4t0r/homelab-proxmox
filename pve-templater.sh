@@ -15,7 +15,7 @@
 #
 # Check logs using:
 #     journalctl -t pve-templater
-#     less /var/log/pve_templater.log
+#     less /var/log/pve-templater.log
 # 
 # Preferred way of using the script with multiple templates is to run all template functions in main():
 #        main() {
@@ -126,7 +126,7 @@ sys_get_lock() {
     log_debug "Trying to acquire the lock file"
     exec 9>"$LOCK_FILE" || exit 1
     flock -n 9 || {
-        log_crit "Another pve_templater instance is running"
+        log_crit "Another pve-templater instance is running"
         log_info "Lock file: $LOCK_FILE"
         log_info "Processes holding or referencing the lock:"
         while IFS= read -r line; do log_info "$line"; done < <(lsof "$LOCK_FILE" 2>/dev/null || true)
