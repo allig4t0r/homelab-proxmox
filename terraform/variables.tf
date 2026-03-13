@@ -111,7 +111,7 @@ locals {
         interface = "scsi${regex("\\d+", key)}"
         size      = value
       }
-      if can(regex("^hdd[0-9]+_size$", key)) && value != null
+      if can(regex("^hdd[2-9]+_size$", key)) && value != null
     ]
   }
 }
@@ -133,6 +133,7 @@ variable vms {
     "flatcar01" = {
       hostname           = "flatcar01"
       ip_address         = "172.17.4.105"
+      hdd2_size          = 40
       tags               = ["terraform", "k8s", "flatcar"]
     }
 
