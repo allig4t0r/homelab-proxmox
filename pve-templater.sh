@@ -561,9 +561,9 @@ main() {
         log_info "Running in batch mode (no CLI parameters)"
         if [[ $LOG_TO_CONSOLE -eq 1 ]]; then log_info "For help and usage instructions, run with -h or --help flag"; fi
         # Put your batch mode templates here
-        provider_ubuntu  "910" "ubuntu-latest"
-        provider_flatcar "904" "flatcar-latest"
-        provider_talos   "905" "talos-latest"
+        # provider_ubuntu  "910" "ubuntu-latest"
+        # provider_flatcar "904" "flatcar-latest"
+        # provider_talos   "905" "talos-latest"
         # Batch mode end
     else
         dispatch_template "${POSITIONAL_ARGS[@]}"
