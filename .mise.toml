@@ -1,0 +1,37 @@
+[env]
+_.python.venv = { path = "{{config_root}}/.venv", create = true } # required:template
+KUBECONFIG = "{{config_root}}/talos/kubeconfig"
+SOPS_AGE_KEY_FILE = "{{config_root}}/age.key"
+TALOSCONFIG = "{{config_root}}/talos/clusterconfig/talosconfig"
+
+[tools]
+"python" = "3.14.3" # required:template
+"aqua:astral-sh/ruff" = "latest" #python linter
+"aqua:astral-sh/uv" = "latest" # required:template
+"pipx" = "latest" # required:template
+"pipx:makejinja" = "2.8.2" # required:template
+"aqua:cli/cli" = "latest" #github cli
+# "aqua:cue-lang/cue" = "0.15.4" # required:template
+# "aqua:go-task/task" = "3.49.1"
+"aqua:jqlang/jq" = "latest"
+"aqua:mikefarah/yq" = "latest"
+
+# encryption
+"aqua:FiloSottile/age" = "latest"
+"aqua:getsops/sops" = "latest"
+
+# k8s
+"aqua:siderolabs/talos" = "latest" #talosctl
+"aqua:budimanjojo/talhelper" = "latest"
+"aqua:kubernetes-sigs/kustomize" = "latest"
+"aqua:kubernetes/kubernetes/kubectl" = "latest"
+"aqua:kubernetes-sigs/krew" = "latest"
+"aqua:cilium/cilium-cli" = "latest"
+"aqua:fluxcd/flux2" = "latest"
+"aqua:helm/helm" = "latest"
+"aqua:helmfile/helmfile" = "latest"
+"aqua:yannh/kubeconform" = "latest"
+
+# ansible
+"pipx:ansible" = "latest"
+"pipx:ansible-lint" = "latest"
