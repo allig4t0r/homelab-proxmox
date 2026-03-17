@@ -1,0 +1,18 @@
+# Secrets
+*.pub
+*.key
+*.decrypted~*.yaml
+/age.key
+# Template config files
+/cluster.yaml
+/nodes.yaml
+# Kubernetes
+kubeconfig
+talosconfig
+# Misc.
+.private/
+.task/
+.venv/
+.DS_Store
+Thumbs.db
+.ai

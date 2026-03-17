@@ -31,6 +31,7 @@ TALOSCONFIG = "{{config_root}}/talos/clusterconfig/talosconfig"
 "aqua:helm/helm" = "latest"
 "aqua:helmfile/helmfile" = "latest"
 "aqua:yannh/kubeconform" = "latest"
+"aqua:argoproj/argo-cd" = "latest"
 
 # ansible
 "pipx:ansible" = "latest"

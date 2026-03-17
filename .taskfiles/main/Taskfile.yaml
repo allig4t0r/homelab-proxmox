@@ -1,0 +1,85 @@
+---
+version: '3'
+
+vars:
+  MAKEJINJA_CONFIG_FILE: '{{.ROOT_DIR}}/makejinja.toml'
+  TEMPLATE_DIR: '{{.ROOT_DIR}}/templates'
+  TEMPLATE_RESOURCES_DIR: '{{.ROOT_DIR}}/.taskfiles/template/resources'
+  TEMPLATE_CONFIG_FILE: '{{.ROOT_DIR}}/cluster.yaml'
+  TEMPLATE_NODE_CONFIG_FILE: '{{.ROOT_DIR}}/nodes.yaml'
+
+tasks:
+
+  :init:
+    desc: Initialize configuration files
+    cmds:
+      - task: generate-template-config
+      - task: generate-age-key
+
+  generate-template-config:
+    internal: true
+    cmds:
+      - mv {{.TEMPLATE_CONFIG_FILE | replace ".yaml" ".sample.yaml"}} {{.TEMPLATE_CONFIG_FILE}}
+      - mv {{.TEMPLATE_NODE_CONFIG_FILE | replace ".yaml" ".sample.yaml"}} {{.TEMPLATE_NODE_CONFIG_FILE}}
+    status:
+      - test -f {{.TEMPLATE_CONFIG_FILE}}
+      - test -f {{.TEMPLATE_NODE_CONFIG_FILE}}
+
+  generate-age-key:
+    internal: true
+    cmd: age-keygen --output {{.SOPS_AGE_KEY_FILE}}
+    status:
+      - test -f {{.SOPS_AGE_KEY_FILE}}
+    preconditions:
+      - which age-keygen
+
+  encrypt-secrets:
+    internal: true
+    cmds:
+      - for: { var: SECRET_FILES }
+        cmd: |
+          if [ $(sops filestatus "{{.ITEM}}" | jq ".encrypted") == "false" ]; then
+              sops --encrypt --in-place "{{.ITEM}}"
+          fi
+    vars:
+      SECRET_FILES:
+        sh: find "{{.BOOTSTRAP_DIR}}" "{{.KUBERNETES_DIR}}" "{{.TALOS_DIR}}" -type f -name "*.sops.*" -print
+    preconditions:
+      - test -f {{.SOPS_AGE_KEY_FILE}}
+      - test -f {{.ROOT_DIR}}/.sops.yaml
+      - which jq sops
+
+  validate-kubernetes-config:
+    internal: true
+    cmd: bash {{.TEMPLATE_RESOURCES_DIR}}/kubeconform.sh {{.KUBERNETES_DIR}}
+    preconditions:
+      - test -f {{.TEMPLATE_RESOURCES_DIR}}/kubeconform.sh
+      - which kubeconform
+
+  validate-talos-config:
+    internal: true
+    dir: '{{.TALOS_DIR}}'
+    cmd: talhelper validate talconfig {{.TALOS_DIR}}/talconfig.yaml
+    preconditions:
+      - test -f {{.TALOS_DIR}}/talconfig.yaml
+      - which talhelper
+
+  debug:
+    desc: Gather common resources in your cluster
+    cmds:
+      - for:
+          matrix:
+            RESOURCE: [certificates, certificaterequests, gitrepositories, helmrepositories, helmreleases, httproutes, kustomizations, nodes, pods]
+        cmd: kubectl get --all-namespaces {{.ITEM.RESOURCE}}
+    preconditions:
+      - test -f {{.KUBECONFIG}}
+      - which kubectl
+
+  reset:
+    desc: Remove templated files and directories
+    prompt: Remove all templated files and directories... continue?
+    cmds:
+      - rm -rf {{.BOOTSTRAP_DIR}}
+      - rm -rf {{.KUBERNETES_DIR}}
+      - rm -rf {{.TALOS_DIR}}
+      - rm -rf {{.ROOT_DIR}}/.sops.yaml
