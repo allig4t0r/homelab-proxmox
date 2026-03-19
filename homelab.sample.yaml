@@ -1,0 +1,17 @@
+# homelab.yaml - Single Source of Truth for your Homelab
+proxmox:
+  host: "172.17.4.44"
+  user: "root"
+  ssh_private_key_path: "~/.ssh/id_ed25519"
+  ssh_pub_key_path: "~/.ssh/id_ed25519.pub"
+
+users:
+  default_non_root: "atata"
+  # To create this hash run mkpasswd --method=SHA-512 --rounds=4096
+  hashed_pw: "$6$guedV4b0gW0M.EXx$nxfHNK/BeaJ2oCRh5jfZoNaOLUi/EQ33osFm7GW9oNfY0QxwqSRGLqOd7FY5879F3iJxCd6MXVfEjiJ3uzqi10"
+
+# Networking defaults
+network:
+  gateway: "172.17.4.1"
+  dns: ["172.17.0.2"]
+  domain: "ag"

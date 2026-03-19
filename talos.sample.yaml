@@ -1,0 +1,4 @@
+# talos.yaml - Talos Linux VM-specific configuration
+# (e.g., node roles, cluster settings, etc.)
+cluster:
+  # To be defined for your Talos implementation

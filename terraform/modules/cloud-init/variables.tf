@@ -8,7 +8,6 @@ variable "proxmox_host" {
 
 variable "proxmox_user" {
   type = string
-  sensitive = true
 }
 
 variable "proxmox_user_private_key" {
@@ -73,5 +72,6 @@ variable "vms" {
     cpu_units                    = optional(number)
     dns_domain                   = optional(string)
     iso_image                    = optional(string)
+    serial_enabled               = optional(bool)
   }))
 }

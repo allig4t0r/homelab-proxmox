@@ -5,8 +5,8 @@ vars:
   MAKEJINJA_CONFIG_FILE: '{{.ROOT_DIR}}/makejinja.toml'
   TEMPLATE_DIR: '{{.ROOT_DIR}}/templates'
   TEMPLATE_RESOURCES_DIR: '{{.ROOT_DIR}}/.taskfiles/template/resources'
-  TEMPLATE_CONFIG_FILE: '{{.ROOT_DIR}}/cluster.yaml'
-  TEMPLATE_NODE_CONFIG_FILE: '{{.ROOT_DIR}}/nodes.yaml'
+  TEMPLATE_CONFIG_FILE: '{{.ROOT_DIR}}/homelab.yaml'
+  TEMPLATE_NODE_CONFIG_FILE: '{{.ROOT_DIR}}/talos.yaml'
 
 tasks:
 
@@ -15,6 +15,8 @@ tasks:
     cmds:
       - task: generate-template-config
       - task: generate-age-key
+      # - task: generate-deploy-key
+      # - task: generate-push-token
 
   generate-template-config:
     internal: true
@@ -32,6 +34,59 @@ tasks:
       - test -f {{.SOPS_AGE_KEY_FILE}}
     preconditions:
       - which age-keygen
+
+  generate-deploy-key:
+    internal: true
+    cmd: ssh-keygen -t ed25519 -C "deploy-key" -f {{.ROOT_DIR}}/github-deploy.key -q -P ""
+    status:
+      - test -f {{.ROOT_DIR}}/github-deploy.key
+    preconditions:
+      - which ssh-keygen
+
+  generate-push-token:
+    internal: true
+    cmd: python -c "import secrets; print(secrets.token_hex(16))" > {{.ROOT_DIR}}/github-push-token.txt
+    status:
+      - test -f {{.ROOT_DIR}}/github-push-token.txt
+
+  :configure:
+    desc: Render and validate configuration files
+    prompt: Any conflicting files in the kubernetes directory will be overwritten... continue?
+    cmds:
+      # - task: validate-schemas
+      - task: render-configs
+      - task: encrypt-secrets
+      # - task: validate-kubernetes-config
+      - task: validate-talos-config
+    preconditions:
+      - msg: An existing Age key interferes with the age key in this repository, rename or delete ~/.config/sops/age/keys.txt
+        sh: '! test -f ~/.config/sops/age/keys.txt'
+      - msg: File cluster.yaml not found, did you run `task init`?
+        sh: test -f {{.TEMPLATE_CONFIG_FILE}}
+      - msg: File nodes.yaml not found, did you run `task init`?
+        sh: test -f {{.TEMPLATE_NODE_CONFIG_FILE}}
+      - msg: File cloudflare-tunnel.json not found, see the README for information on creating it.
+        sh: test -f {{.ROOT_DIR}}/cloudflare-tunnel.json
+
+  validate-schemas:
+    internal: true
+    cmds:
+      - cue vet {{.TEMPLATE_CONFIG_FILE}} {{.TEMPLATE_RESOURCES_DIR}}/cluster.schema.cue
+      - cue vet {{.TEMPLATE_NODE_CONFIG_FILE}} {{.TEMPLATE_RESOURCES_DIR}}/nodes.schema.cue
+    preconditions:
+      - test -f {{.TEMPLATE_RESOURCES_DIR}}/cluster.schema.cue
+      - test -f {{.TEMPLATE_RESOURCES_DIR}}/nodes.schema.cue
+      - which cue
+
+  render-configs:
+    internal: true
+    cmd: makejinja
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    preconditions:
+      - test -f {{.TEMPLATE_DIR}}/scripts/plugin.py
+      - test -f {{.MAKEJINJA_CONFIG_FILE}}
+      - which makejinja
 
   encrypt-secrets:
     internal: true

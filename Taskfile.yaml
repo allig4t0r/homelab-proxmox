@@ -4,6 +4,8 @@ version: '3'
 set: [pipefail]
 shopt: [globstar]
 
+dotenv: ['.env']
+
 vars:
   BOOTSTRAP_DIR: '{{.ROOT_DIR}}/bootstrap'
   KUBERNETES_DIR: '{{.ROOT_DIR}}/kubernetes'

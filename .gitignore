@@ -4,8 +4,11 @@
 *.decrypted~*.yaml
 /age.key
 # Template config files
-/cluster.yaml
-/nodes.yaml
+/homelab.yaml
+/talos.yaml
+# Generated files
+*.auto.tfvars
+.env
 # Kubernetes
 kubeconfig
 talosconfig
@@ -15,4 +18,4 @@ talosconfig
 .venv/
 .DS_Store
 Thumbs.db
-.ai
+*.ai

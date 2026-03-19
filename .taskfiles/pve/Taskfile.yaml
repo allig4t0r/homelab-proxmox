@@ -1,0 +1,21 @@
+---
+version: '3'
+
+vars:
+  PVE_TEMPLATER_SCRIPT: '{{.SCRIPTS_DIR}}/pve-templater.sh'
+  PVE_TEMPLATER_REMOTE: '/usr/sbin/pve-templater'
+
+tasks:
+
+  install-templater:
+    desc: Install pve-templater script on Proxmox host
+    prompt: This will also install prerequisites for pve-templater on {{.PROXMOX_HOST}}. Continue?
+    cmds:
+      - ssh -i {{.PROXMOX_SSH_PRIVATE_KEY_PATH}} {{.PROXMOX_USER}}@{{.PROXMOX_HOST}} "apt update && apt install -y curl jq wget libguestfs-tools xz"
+      - scp -i {{.PROXMOX_SSH_PRIVATE_KEY_PATH}} {{.PVE_TEMPLATER_SCRIPT}} {{.PROXMOX_USER}}@{{.PROXMOX_HOST}}:{{.PVE_TEMPLATER_REMOTE}}
+      - ssh -i {{.PROXMOX_SSH_PRIVATE_KEY_PATH}} {{.PROXMOX_USER}}@{{.PROXMOX_HOST}} "chmod +x {{.PVE_TEMPLATER_REMOTE}}"
+    preconditions:
+      - test -f {{.PVE_TEMPLATER_SCRIPT}}
+      - '[ -n "{{.PROXMOX_SSH_PRIVATE_KEY_PATH}}" ] || (echo "PROXMOX_SSH_PRIVATE_KEY_PATH is not set. Run task :init first" && exit 1)'
+      - test -f {{.PROXMOX_SSH_PRIVATE_KEY_PATH}}
+      - '[ -n "{{.PROXMOX_HOST}}" ] || (echo "PROXMOX_HOST is not set. Run task :init first" && exit 1)'
