@@ -343,6 +343,7 @@ pve_is_template_outdated() {
     if [[ "$FORCE_DOWNLOAD" -eq 1 ]]; then return 0; fi # "Outdated" if --force
     if [[ -z "$expected_value" ]]; then return 0; fi # "Outdated" if expected value is empty
     local current_value="$(pve_get_metadata "$vmid" "$search_key")"
+    log_info "Current hash/version: ${current_value}"
     if [[ -n "$current_value" && "$current_value" == "$expected_value" ]]; then
         return 1 # False (Not outdated)
     fi
