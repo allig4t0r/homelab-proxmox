@@ -11,27 +11,23 @@ vars:
   KUBERNETES_DIR: '{{.ROOT_DIR}}/kubernetes'
   SCRIPTS_DIR: '{{.ROOT_DIR}}/scripts'
   TALOS_DIR: '{{.ROOT_DIR}}/talos'
-  PRIVATE_DIR: '{{.ROOT_DIR}}/.private'
   TALOSCONFIG: '{{.ROOT_DIR}}/talos/clusterconfig/talosconfig'
+  TERRAFORM_DIR: '{{.ROOT_DIR}}/terraform'
 
 env:
   KUBECONFIG: '{{.ROOT_DIR}}/talos/kubeconfig'
+  SOPS_CONFIG: '{{.ROOT_DIR}}/.sops.yaml'
   SOPS_AGE_KEY_FILE: '{{.ROOT_DIR}}/age.key'
   TALOSCONFIG: '{{.TALOSCONFIG}}'
 
 includes:
-  bootstrap: .taskfiles/bootstrap
   talos: .taskfiles/talos
   template: .taskfiles/template
   pve: .taskfiles/pve
+  terraform:
+    taskfile: .taskfiles/terraform
+    dir: '{{.TERRAFORM_DIR}}'
 
 tasks:
 
   default: task --list
-
-  reconcile:
-    desc: Force Flux to pull in changes from your Git repository
-    cmd: flux --namespace flux-system reconcile kustomization flux-system --with-source
-    preconditions:
-      - test -f {{.KUBECONFIG}}
-      - which flux

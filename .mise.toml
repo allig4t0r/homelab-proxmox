@@ -11,10 +11,16 @@ TALOSCONFIG = "{{config_root}}/talos/clusterconfig/talosconfig"
 "pipx" = "latest" # required:template
 "pipx:makejinja" = "2.8.2" # required:template
 "aqua:cli/cli" = "latest" #github cli
-# "aqua:cue-lang/cue" = "0.15.4" # required:template
-# "aqua:go-task/task" = "3.49.1"
+"aqua:cue-lang/cue" = "latest" # required:template
+"aqua:go-task/task" = "latest"
 "aqua:jqlang/jq" = "latest"
-"aqua:mikefarah/yq" = "latest"
+# "aqua:mikefarah/yq" = "latest"
+"aqua:01mf02/jaq" = "latest" # faster Rust clone for jq
+
+# ai
+# "aqua:openai/codex" = "latest"
+# "aqua:anthropics/claude-code" = "latest"
+# "npm:@google/gemini-cli" = "latest"
 
 # encryption
 "aqua:FiloSottile/age" = "latest"

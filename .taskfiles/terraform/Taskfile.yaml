@@ -1,0 +1,34 @@
+---
+version: '3'
+
+tasks:
+
+  :tf:
+    desc: Check & apply the changes in terraform files
+    cmds:
+      - task: terraform-plan
+      - task: terraform-apply
+      - rm -f plan plan.json
+
+  terraform-plan:
+    internal: true
+    desc: Run terraform plan and show a concise summary
+    cmds:
+      - terraform plan -out=plan > /dev/null
+      - bash {{.SCRIPTS_DIR}}/tf-parser.sh plan
+    preconditions:
+      - msg: Unsupported bash version, run `brew install bash` to upgrade
+        sh: '{{if eq OS "darwin"}}test -f /opt/homebrew/bin/bash || test -f /usr/local/bin/bash{{end}}'
+      - test -f {{.SCRIPTS_DIR}}/tf-parser.sh
+      - which terraform
+      - which jaq
+
+  terraform-apply:
+    internal: true
+    desc: Apply all the terraform changes
+    prompt: Are we good to apply the proposed changes?
+    cmd: terraform apply plan
+    status:
+      - test ! -f plan
+    preconditions:
+      - which terraform

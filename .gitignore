@@ -19,4 +19,4 @@ talosconfig
 .DS_Store
 Thumbs.db
 *.ai
-/temp/*
+temp/
