@@ -1,0 +1,63 @@
+#cloud-config
+# Centos Stream 10
+
+hostname: ${hostname}
+
+manage_etc_hosts: true
+
+users:
+  - name: root
+    ssh_authorized_keys:
+      - ${root_ssh_pub_key}
+  - name: ${default_non_root_user}
+    shell: /bin/bash
+    groups: sudo
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    lock_passwd: false
+    hashed_passwd: ${default_non_root_user_hashed_pw}
+    ssh_authorized_keys:
+      - ${root_ssh_pub_key}
+disable_root: False
+
+package_upgrade: true
+
+runcmd:
+  - dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-10.noarch.rpm
+  # Modify CentOS Stream repositories to use the Yandex mirror
+  # there's no resilientstorage for 10-stream on mirror.yandex.ru for some reeason
+  # -e 's|^metalink=.*repo=centos-resilientstorage-\$stream&arch=\$basearch.*|baseurl=https://mirror.yandex.ru/centos-stream/$releasever-stream/ResilientStorage/$basearch/os/\n#&|' \
+  - |
+    for repo in /etc/yum.repos.d/centos*.repo; do
+      sed -i -E \
+        -e 's|^metalink=.*repo=centos-baseos-\$stream&arch=\$basearch.*|baseurl=https://mirror.yandex.ru/centos-stream/$releasever-stream/BaseOS/$basearch/os/\n#&|' \
+        -e 's|^metalink=.*repo=centos-appstream-\$stream&arch=\$basearch.*|baseurl=https://mirror.yandex.ru/centos-stream/$releasever-stream/AppStream/$basearch/os/\n#&|' \
+        -e 's|^metalink=.*repo=centos-crb-\$stream&arch=\$basearch.*|baseurl=https://mirror.yandex.ru/centos-stream/$releasever-stream/CRB/$basearch/os/\n#&|' \
+        -e 's|^metalink=.*repo=centos-highavailability-\$stream&arch=\$basearch.*|baseurl=https://mirror.yandex.ru/centos-stream/$releasever-stream/HighAvailability/$basearch/os/\n#&|' \
+        -e 's|^metalink=.*repo=centos-nfv-\$stream&arch=\$basearch.*|baseurl=https://mirror.yandex.ru/centos-stream/$releasever-stream/NFV/$basearch/os/\n#&|' \
+        -e 's|^metalink=.*repo=centos-rt-\$stream&arch=\$basearch.*|baseurl=https://mirror.yandex.ru/centos-stream/$releasever-stream/RT/$basearch/os/\n#&|' \
+        -e 's|^metalink=.*repo=centos-extras-sig-extras-common-\$stream&arch=\$basearch.*|baseurl=https://mirror.yandex.ru/centos-stream/SIGs/$releasever-stream/extras/$basearch/extras-common/\n#&|' \
+        "$repo"
+    done
+
+  # (Optional) Modify EPEL repositories to use the Yandex mirror if you have EPEL installed
+  - |
+    if ls /etc/yum.repos.d/epel.repo 1> /dev/null 2>&1; then
+      sed -i -E \
+        -e 's|^metalink=.*repo=epel(\$\{releasever_minor:\+-z\})?-\$releasever&arch=\$basearch.*|baseurl=https://mirror.yandex.ru/epel/$releasever/Everything/$basearch/\n#&|' \
+        /etc/yum.repos.d/epel.repo
+    fi
+
+  # - [ sh, -c, 'echo "fastestmirror=True" >> /etc/dnf/dnf.conf' ]
+  - [ sh, -c, 'echo "max_parallel_downloads=10" >> /etc/dnf/dnf.conf' ]
+
+  # Clean the dnf cache to ensure the new baseurls are fetched
+  - dnf clean all
+  - dnf makecache
+  - dnf install -y nano htop
+
+# for some reason both of these options do not install anything
+# packages:
+#   - nano
+#   - yum: [htop]
+
+timezone: Europe/Moscow
