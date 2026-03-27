@@ -601,6 +601,59 @@ EOF
     log_info "Debian template ${name} (${vmid}) successfully created"
 }
 
+provider_centos() {
+    local vmid="$1" name="$2"
+    local centos_version="${OVERRIDE_VERSION:-10}"
+    local base_url="https://cloud.centos.org/centos/${centos_version}-stream/x86_64/images"
+    local image_name="CentOS-Stream-GenericCloud-x86_64-${centos_version}-latest.x86_64.qcow2"
+    local image_url="${base_url}/${image_name}"
+    local checksum_url="${image_url}.SHA256SUM"
+    local remote_hash cached_image image_date
+
+    log_info "Preparing CentOS Stream (${centos_version}) template"
+    log_info "Fetching CentOS checksums"
+    
+    remote_hash="$(sys_fetch "$checksum_url" | awk -F'= ' '/^SHA256/ {print $2}')"
+
+    if [[ -z "$remote_hash" ]]; then
+        log_error "Failed to obtain upstream SHA256 hash from ${checksum_url}"
+        return 1
+    fi
+
+    if ! pve_is_template_outdated "$vmid" "$remote_hash" "hash"; then
+        log_info "CentOS image already up-to-date (${remote_hash}). Exiting."
+        return 0
+    fi
+
+    log_info "Upstream CentOS SHA256: ${remote_hash}"
+
+    cached_image="$(sys_download_file "$image_url" "wget" "$remote_hash" "sha256")"
+    
+    image_date="$(sys_fetch -I "$image_url" | awk -F': ' 'tolower($1)=="last-modified" {print $2}' | tr -d '\r')"
+    image_date="$(date -d "$image_date" +%Y-%m-%d 2>/dev/null || echo "${image_date:-Unknown}")"
+
+    mkdir -p "$WORK_DIR"
+    local work_image="${WORK_DIR}/${vmid}_${image_name}"
+    CLEANUP_FILES+=("$work_image")
+    
+    log_info "Creating working copy of image..."
+    cp --reflink=auto "$cached_image" "$work_image"
+    
+    img_inject_qga "$work_image"
+
+    local desc="$(cat <<EOF
+CentOS Stream **${centos_version}** Cloud Image  
+Build date: **${image_date}**  
+Checksum (SHA256): **${remote_hash}**  
+Date: **$(date -Is)**  
+EOF
+)"
+    
+    pve_build_template "$vmid" "$name" "$work_image" "$desc" "${RESIZE_VALUE}"
+
+    log_info "CentOS template ${name} (${vmid}) successfully created"
+}
+
 ############################# MAIN ############################################
 
 main() {
@@ -622,6 +675,7 @@ main() {
         # provider_flatcar "904" "flatcar-latest"
         # provider_talos   "905" "talos-latest"
         # provider_debian  "902" "debian-latest"
+        # provider_centos  "903" "centos-latest"
         # Batch mode end
     else
         dispatch_template "${POSITIONAL_ARGS[@]}"
