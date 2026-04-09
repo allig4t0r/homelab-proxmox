@@ -8,7 +8,6 @@ tasks:
     cmds:
       - task: terraform-plan
       - task: terraform-apply
-      - rm -f plan plan.json
 
   terraform-plan:
     internal: true
@@ -27,8 +26,19 @@ tasks:
     internal: true
     desc: Apply all the terraform changes
     prompt: Are we good to apply the proposed changes?
-    cmd: terraform apply plan
+    cmds:
+      - terraform apply plan
+      - rm -f plan plan.json
     status:
       - test ! -f plan
     preconditions:
       - which terraform
+
+  destroy-talos:
+    desc: Delete talos.auto.tfvars and apply
+    cmds:
+      - rm -f {{.TERRAFORM_DIR}}/talos.auto.tfvars
+      - task: terraform-plan
+      - task: terraform-apply
+    status:
+      - test ! -f talos.auto.tfvars

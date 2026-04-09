@@ -14,13 +14,14 @@ vars:
   TALOSCONFIG: '{{.ROOT_DIR}}/talos/clusterconfig/talosconfig'
   TERRAFORM_DIR: '{{.ROOT_DIR}}/terraform'
 
-env:
-  KUBECONFIG: '{{.ROOT_DIR}}/talos/kubeconfig'
-  SOPS_CONFIG: '{{.ROOT_DIR}}/.sops.yaml'
-  SOPS_AGE_KEY_FILE: '{{.ROOT_DIR}}/age.key'
-  TALOSCONFIG: '{{.TALOSCONFIG}}'
+# env:
+  # KUBECONFIG: '{{.ROOT_DIR}}/talos/kubeconfig'
+  # SOPS_CONFIG: '{{.ROOT_DIR}}/.sops.yaml'
+  # SOPS_AGE_KEY_FILE: '{{.ROOT_DIR}}/age.key'
+  # TALOSCONFIG: '{{.TALOSCONFIG}}'
 
 includes:
+  bootstrap: .taskfiles/bootstrap
   talos: .taskfiles/talos
   template: .taskfiles/template
   pve: .taskfiles/pve
@@ -31,3 +32,13 @@ includes:
 tasks:
 
   default: task --list
+
+  recreate-talos:
+    desc: Recreate talos nodes from scratch
+    cmds:
+      - task: terraform:destroy-talos
+      - task: template:reset
+      - task: configure
+      - task: tf
+      - task: bootstrap:talos
+      - task: bootstrap:apps

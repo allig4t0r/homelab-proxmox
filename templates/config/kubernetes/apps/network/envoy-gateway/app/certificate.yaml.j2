@@ -1,0 +1,22 @@
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: "${SECRET_DOMAIN/./-}-homelab"
+  namespace: cert-manager
+spec:
+  isCA: true
+  dnsNames:
+    - "${SECRET_DOMAIN}"
+    - "*.${SECRET_DOMAIN}"
+  commonName: "${SECRET_DOMAIN/./-}-homelab"
+  secretName: "${SECRET_DOMAIN/./-}-homelab-tls"
+  usages:
+    - digital signature
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  issuerRef:
+    name: selfsigned-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io

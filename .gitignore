@@ -20,3 +20,8 @@ talosconfig
 Thumbs.db
 *.ai
 temp/
+.sops.yaml
+.terraform/
+.terraform.lock.hcl
+terraform.tfstate*
+terraform/modules/cloud-init/generated/*

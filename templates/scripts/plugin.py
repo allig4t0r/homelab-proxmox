@@ -47,28 +47,6 @@ def age_key(key_type: str, file_path: str = 'age.key') -> str:
         raise RuntimeError(f"Unexpected error while processing {file_path}: {e}")
 
 
-# Return the GitHub deploy key from github-deploy.key
-def github_deploy_key(file_path: str = 'github-deploy.key') -> str:
-    try:
-        with open(file_path, 'r') as file:
-            return file.read().strip()
-    except FileNotFoundError:
-        raise FileNotFoundError(f"File not found: {file_path}")
-    except Exception as e:
-        raise RuntimeError(f"Unexpected error while reading {file_path}: {e}")
-
-
-# Return the Flux / GitHub push token from github-push-token.txt
-def github_push_token(file_path: str = 'github-push-token.txt') -> str:
-    try:
-        with open(file_path, 'r') as file:
-            return file.read().strip()
-    except FileNotFoundError:
-        raise FileNotFoundError(f"File not found: {file_path}")
-    except Exception as e:
-        raise RuntimeError(f"Unexpected error while reading {file_path}: {e}")
-
-
 # Return a list of files in the talos patches directory
 def talos_patches(value: str) -> list[str]:
     path = Path(f'templates/config/talos/patches/{value}')
@@ -91,8 +69,6 @@ class Plugin(makejinja.plugin.Plugin):
         data.setdefault('node_ntp_servers', ['162.159.200.1', '162.159.200.123'])
         data.setdefault('cluster_pod_cidr', '10.42.0.0/16')
         data.setdefault('cluster_svc_cidr', '10.43.0.0/16')
-        data.setdefault('repository_branch', 'main')
-        data.setdefault('repository_visibility', 'public')
         data.setdefault('cilium_loadbalancer_mode', 'dsr')
 
         # If all BGP keys are set, enable BGP
@@ -117,7 +93,5 @@ class Plugin(makejinja.plugin.Plugin):
     def functions(self) -> makejinja.plugin.Functions:
         return [
             age_key,
-            github_deploy_key,
-            github_push_token,
             talos_patches
         ]

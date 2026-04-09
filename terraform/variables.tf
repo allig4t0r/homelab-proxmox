@@ -42,6 +42,7 @@ variable "default_non_root_user_hashed_pw" {
 }
 
 variable "vms" {
+  default     = {}
   type        = map(any)
   description = "A map of VM configurations, manually managed in terraform.tfvars."
 }
@@ -61,10 +62,18 @@ variable "node_defaults" {
   description = "Hardware-specific defaults for each Proxmox node, manually managed in terraform.tfvars."
 }
 
+variable "talos_vms" {
+  default     = {}
+  type        = map(any)
+  description = "Templated vms for Talos nodes. Located in talos.auto.tfvars."
+}
+
 locals {
+  all_vms = merge(var.vms, var.talos_vms != null ? var.talos_vms : {})
+
   # Merge order: base_defaults <- tag_defaults <- node_defaults <- vm_specific
   vms_with_defaults = {
-    for vm_name, vm_spec in var.vms : vm_name => merge(
+    for vm_name, vm_spec in local.all_vms : vm_name => merge(
       var.base_defaults,
       merge([
         for tag in lookup(vm_spec, "tags", []) :
@@ -78,7 +87,7 @@ locals {
   }
 
   extra_disks = {
-    for vm_name, vm_spec in var.vms : vm_name => [
+    for vm_name, vm_spec in local.all_vms : vm_name => [
       for key, value in vm_spec :
       {
         interface = "scsi${regex("\\d+", key)}"

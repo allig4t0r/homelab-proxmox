@@ -2,7 +2,7 @@
 inputs = ["./templates/config"]
 output = "./"
 exclude_patterns = ["*.partial.yaml.j2"]
-data = ["./homelab.yaml", "./talos.yaml"]
+data = ["./homelab.yaml"]
 import_paths = ["./templates/scripts"]
 loaders = ["plugin:Plugin"]
 jinja_suffix = ".j2"

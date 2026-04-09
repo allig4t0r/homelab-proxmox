@@ -1,0 +1,33 @@
+machine:
+  registries:
+    mirrors:
+      ghcr.io:
+        endpoints:
+          - http://nexus.ag:8085
+      gcr.io:
+        endpoints:
+          - http://nexus.ag:8085
+      mirror.gcr.io:
+        endpoints:
+          - http://nexus.ag:8085
+      registry.k8s.io:
+        endpoints:
+          - http://nexus.ag:8085
+      quay.io:
+        endpoints:
+          - http://nexus.ag:8085
+      docker.io:
+        endpoints:
+          - http://nexus.ag:8085
+      nexus.ag:8082:
+        endpoints:
+          - http://nexus.ag:8082
+      nexus.ag:8085:
+        endpoints:
+          - http://nexus.ag:8085
+#      us-central1-docker.pkg.dev:
+#       endpoints:
+#          - http://nexus.ag:8085
+#      "*":
+#        endpoints:
+#          - http://nexus.ag:8085

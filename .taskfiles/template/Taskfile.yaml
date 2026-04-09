@@ -6,7 +6,6 @@ vars:
   TEMPLATE_DIR: '{{.ROOT_DIR}}/templates'
   TEMPLATE_RESOURCES_DIR: '{{.ROOT_DIR}}/.taskfiles/template/resources'
   TEMPLATE_CONFIG_FILE: '{{.ROOT_DIR}}/homelab.yaml'
-  TEMPLATE_TALOS_CONFIG_FILE: '{{.ROOT_DIR}}/talos.yaml'
 
 tasks:
 
@@ -15,17 +14,14 @@ tasks:
     cmds:
       - task: generate-template-config
       - task: generate-age-key
-      # - task: generate-deploy-key
-      # - task: generate-push-token
+      - task: install-terraform-provider
 
   generate-template-config:
     internal: true
     cmds:
       - mv {{.TEMPLATE_CONFIG_FILE | replace ".yaml" ".sample.yaml"}} {{.TEMPLATE_CONFIG_FILE}}
-      - mv {{.TEMPLATE_TALOS_CONFIG_FILE | replace ".yaml" ".sample.yaml"}} {{.TEMPLATE_TALOS_CONFIG_FILE}}
     status:
       - test -f {{.TEMPLATE_CONFIG_FILE}}
-      - test -f {{.TEMPLATE_TALOS_CONFIG_FILE}}
 
   generate-age-key:
     internal: true
@@ -35,25 +31,18 @@ tasks:
     preconditions:
       - which age-keygen
 
-  generate-deploy-key:
+  install-terraform-provider:
     internal: true
-    cmd: ssh-keygen -t ed25519 -C "deploy-key" -f {{.ROOT_DIR}}/github-deploy.key -q -P ""
-    status:
-      - test -f {{.ROOT_DIR}}/github-deploy.key
+    dir: '{{.TERRAFORM_DIR}}'
+    cmd: terraform init -upgrade
     preconditions:
-      - which ssh-keygen
-
-  generate-push-token:
-    internal: true
-    cmd: python -c "import secrets; print(secrets.token_hex(16))" > {{.ROOT_DIR}}/github-push-token.txt
-    status:
-      - test -f {{.ROOT_DIR}}/github-push-token.txt
+      - which terraform
 
   :configure:
     desc: Render and validate configuration files
     prompt: Any conflicting files in the kubernetes directory will be overwritten... continue?
     cmds:
-      # - task: validate-schemas
+      - task: validate-schemas
       - task: render-configs
       - task: encrypt-secrets
       # - task: validate-kubernetes-config
@@ -63,17 +52,13 @@ tasks:
         sh: '! test -f ~/.config/sops/age/keys.txt'
       - msg: File homelab.yaml not found, did you run `task init`?
         sh: test -f {{.TEMPLATE_CONFIG_FILE}}
-      - msg: File talos.yaml not found, did you run `task init`?
-        sh: test -f {{.TEMPLATE_TALOS_CONFIG_FILE}}
 
   validate-schemas:
     internal: true
     cmds:
-      - cue vet {{.TEMPLATE_CONFIG_FILE}} {{.TEMPLATE_RESOURCES_DIR}}/cluster.schema.cue
-      - cue vet {{.TEMPLATE_TALOS_CONFIG_FILE}} {{.TEMPLATE_RESOURCES_DIR}}/nodes.schema.cue
+      - cue vet {{.TEMPLATE_CONFIG_FILE}} {{.TEMPLATE_RESOURCES_DIR}}/homelab.schema.cue
     preconditions:
-      - test -f {{.TEMPLATE_RESOURCES_DIR}}/cluster.schema.cue
-      - test -f {{.TEMPLATE_RESOURCES_DIR}}/nodes.schema.cue
+      - test -f {{.TEMPLATE_RESOURCES_DIR}}/homelab.schema.cue
       - which cue
 
   render-configs:
@@ -96,7 +81,7 @@ tasks:
           fi
     vars:
       SECRET_FILES:
-        sh: find "{{.BOOTSTRAP_DIR}}" "{{.KUBERNETES_DIR}}" "{{.TALOS_DIR}}" -type f -name "*.sops.*" -print
+        sh: find "{{.BOOTSTRAP_DIR}}" "{{.KUBERNETES_DIR}}" "{{.TALOS_DIR}}" "{{.TERRAFORM_DIR}}" -type f -name "*.sops.*" -print
     preconditions:
       - test -f {{.SOPS_AGE_KEY_FILE}}
       - test -f {{.ROOT_DIR}}/.sops.yaml
@@ -135,4 +120,5 @@ tasks:
       - rm -rf {{.BOOTSTRAP_DIR}}
       - rm -rf {{.KUBERNETES_DIR}}
       - rm -rf {{.TALOS_DIR}}
-      - rm -rf {{.ROOT_DIR}}/.sops.yaml
+      - rm -f {{.ROOT_DIR}}/.sops.yaml
+      - rm -f {{.TERRAFORM_DIR}}/*.auto.tfvars

@@ -53,7 +53,7 @@ resource "terraform_data" "cloud_init_user_file" {
 
   provisioner "file" {
     source      = local_file.cloud_init_user_file[each.key].filename
-    destination = "/var/lib/vz/snippets/cloud_init_${each.value.hostname}.yaml"
+    destination = "/var/lib/vz/snippets/cloud_init_user_${each.value.hostname}.yaml"
   }
 }
 
@@ -102,7 +102,7 @@ resource "proxmox_virtual_environment_vm" "virtual_machines" {
   clone {
     vm_id = each.value.vm_template_id
   }
-  
+
   agent {
     enabled = each.value.qemu_agent
     trim    = true
@@ -122,7 +122,7 @@ resource "proxmox_virtual_environment_vm" "virtual_machines" {
     dedicated = each.value.memory
     floating  = each.value.memory
   }
-  
+
   operating_system {
     type = each.value.qemu_os
   }
@@ -139,7 +139,7 @@ resource "proxmox_virtual_environment_vm" "virtual_machines" {
   initialization {
     interface     = "scsi0"
     datastore_id  = each.value.hdd_storage
-    
+
     dynamic dns {
       for_each = each.value.cloud_config_network_enabled == true ? [] : [1]
       content {

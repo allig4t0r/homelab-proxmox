@@ -1,6 +1,7 @@
 [env]
 _.python.venv = { path = "{{config_root}}/.venv", create = true } # required:template
 KUBECONFIG = "{{config_root}}/talos/kubeconfig"
+SOPS_CONFIG = "{{config_root}}/.sops.yaml"
 SOPS_AGE_KEY_FILE = "{{config_root}}/age.key"
 TALOSCONFIG = "{{config_root}}/talos/clusterconfig/talosconfig"
 
@@ -14,7 +15,7 @@ TALOSCONFIG = "{{config_root}}/talos/clusterconfig/talosconfig"
 "aqua:cue-lang/cue" = "latest" # required:template
 "aqua:go-task/task" = "latest"
 "aqua:jqlang/jq" = "latest"
-# "aqua:mikefarah/yq" = "latest"
+"aqua:mikefarah/yq" = "latest"
 "aqua:01mf02/jaq" = "latest" # faster Rust clone for jq
 
 # ai
@@ -33,13 +34,14 @@ TALOSCONFIG = "{{config_root}}/talos/clusterconfig/talosconfig"
 "aqua:kubernetes/kubernetes/kubectl" = "latest"
 "aqua:kubernetes-sigs/krew" = "latest"
 "aqua:cilium/cilium-cli" = "latest"
-"aqua:fluxcd/flux2" = "latest"
+# "aqua:fluxcd/flux2" = "latest"
 "aqua:helm/helm" = "latest"
 "aqua:helmfile/helmfile" = "latest"
 "aqua:yannh/kubeconform" = "latest"
 "aqua:argoproj/argo-cd" = "latest"
 "aqua:ahmetb/kubectx/kubens" = "latest"
 "aqua:ahmetb/kubectx" = "latest"
+# "aqua:containerd/nerdctl" = "latest" # only for linux/windows
 
 # ansible
 "pipx:ansible" = "latest"
