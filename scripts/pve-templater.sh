@@ -16,7 +16,7 @@
 # Check logs using:
 #     journalctl -t pve-templater
 #     less /var/log/pve-templater.log
-# 
+#
 # Preferred way of using the script with multiple templates is to run all template functions in main():
 #        main() {
 #            <..>
@@ -69,7 +69,7 @@ TALOS_SCHEMATIC_ID="cfd24ff03f3a694b19911cb656d76636339f25b45ff1f46931095bbaad2c
 
 cleanup() {
     local exit_code=$?
-    
+
     if [[ ${#CLEANUP_FILES[@]} -gt 0 ]]; then
         log_debug "Cleaning up tracked temporary files: ${CLEANUP_FILES[*]}"
         rm -f "${CLEANUP_FILES[@]}"
@@ -79,7 +79,7 @@ cleanup() {
         log_debug "Searching for orphaned .tmp.<PID> files in CACHE_DIR"
         find "$CACHE_DIR" -type f -regex ".*\.tmp\.[0-9]+$" -exec rm -f {} + 2>/dev/null || true
     fi
-    
+
     if [[ -d "$WORK_DIR" ]]; then
         log_debug "Searching for orphaned .tmp.<PID> files in WORK_DIR"
         find "$WORK_DIR" -type f -regex ".*\.tmp\.[0-9]+$" -exec rm -f {} + 2>/dev/null || true
@@ -254,7 +254,7 @@ sys_compute_hash() {
 
 sys_download_file() {
     # sys_require_bin wget
-    local image_url="$1" tool="${2:-wget}" expected_hash="${3:-}" hash_type="${4:-sha256}" 
+    local image_url="$1" tool="${2:-wget}" expected_hash="${3:-}" hash_type="${4:-sha256}"
     local target_path="${CACHE_DIR%/}/$(basename "$image_url")"
     local tmp_path="${target_path}.tmp.$$"
     local wget_opts=(--timeout=30 --tries=3 --read-timeout=30 -O "$tmp_path" -q)
@@ -268,7 +268,7 @@ sys_download_file() {
     [[ "$LOG_TO_CONSOLE" -eq 1 ]] && { wget_opts+=(--show-progress); curl_opts+=(--progress-bar); } || curl_opts+=(--silent)
 
     log_info "URL: ${image_url} using ${tool}"
-    
+
     if [[ "$tool" == "curl" ]]; then
         log_debug "curl opts: ${curl_opts[*]}"
 
@@ -287,8 +287,8 @@ sys_download_file() {
         log_error "Download failed: ${image_url}"
         rm -f "$tmp_path"
         return 1
-    fi    
-    
+    fi
+
     if [ ! -s "$tmp_path" ]; then
         log_error "Downloaded file is empty"; rm -f "$tmp_path"; return 1
     fi
@@ -375,14 +375,14 @@ pve_import_disk() {
 
 pve_build_template() {
     local vmid="$1" name="$2" image="$3" desc="$4" resize="${5:-}"
-    
+
     pve_create_vm "$vmid" "$name"
     if [[ -n "$resize" ]]; then img_resize "$image" "$resize"; fi
     pve_import_disk "$vmid" "$image"
-    
+
     log_info "Writing template metadata"
     qm set "$vmid" --description "$desc"
-    
+
     log_info "Converting VM ${vmid} to template..."
     qm template "$vmid"
 }
@@ -403,7 +403,7 @@ provider_talos() {
     fi
 
     if [[ -z "$talos_version" ]]; then log_error "Failed to obtain latest upstream tag. Exiting."; return 1; fi
-    
+
     if ! pve_is_template_outdated "$vmid" "$talos_version" "tag"; then
         log_info "Talos image already up-to-date (${talos_version}). Exiting."
         return 0
@@ -413,7 +413,7 @@ provider_talos() {
 
     local talos_url="https://factory.talos.dev/image/${TALOS_SCHEMATIC_ID}/${talos_version}/nocloud-amd64.raw.xz"
     xz_file="$(sys_download_file "$talos_url" "curl")"
-    
+
     local raw_img="${WORK_DIR}/talos_${vmid}.raw"
     mkdir -p "$WORK_DIR"
     CLEANUP_FILES+=("$raw_img")
@@ -422,20 +422,20 @@ provider_talos() {
     xz -dfk "$xz_file" -c > "$raw_img"
 
     local desc="$(cat <<EOF
-Talos Linux published at: **${latest_date}**  
-Version: **${talos_version}**  
-Date: **$(date -Is)**  
+Talos Linux published at: **${latest_date}**
+Version: **${talos_version}**
+Date: **$(date -Is)**
 EOF
 )"
-    
+
     pve_build_template "$vmid" "$name" "$raw_img" "$desc" "${RESIZE_VALUE}"
-    
+
     log_info "Talos template ${name} (${vmid}) successfully created"
 }
 
 provider_ubuntu() {
-    local vmid="$1" name="$2" remote_hash cached_image image_date
-    local codename="${OS_CODENAME:-noble}"
+    local vmid="$1" name="$2" arg_codename="${3:-}" remote_hash cached_image image_date
+    local codename="${arg_codename:-${OS_CODENAME:-resolute}}"
     local image_name="${codename}-server-cloudimg-amd64.img"
     local image_url="https://cloud-images.ubuntu.com/${codename}/current/${image_name}"
     local checksum_url="https://cloud-images.ubuntu.com/${codename}/current/SHA256SUMS"
@@ -460,20 +460,20 @@ provider_ubuntu() {
     mkdir -p "$WORK_DIR"
     local work_image="${WORK_DIR}/${vmid}_${image_name}"
     CLEANUP_FILES+=("$work_image")
-    
+
     log_info "Creating working copy of image..."
     cp --reflink=auto "$cached_image" "$work_image"
-    
+
     img_inject_qga "$work_image"
 
     local desc="$(cat <<EOF
-Ubuntu **${codename^}** Cloud Image  
-Build date: **${image_date}**  
-Checksum (SHA256): **${remote_hash}**  
-Date: **$(date -Is)**  
+Ubuntu **${codename^}** Cloud Image
+Build date: **${image_date}**
+Checksum (SHA256): **${remote_hash}**
+Date: **$(date -Is)**
 EOF
 )"
-    
+
     pve_build_template "$vmid" "$name" "$work_image" "$desc" "${RESIZE_VALUE}"
 
     log_info "Ubuntu template ${name} (${vmid}) successfully created"
@@ -484,12 +484,12 @@ provider_flatcar() {
     local base_url="https://stable.release.flatcar-linux.net/amd64-usr/current"
     local version_url="${base_url}/version.txt"
     local version_info flatcar_version flatcar_build_id
-    
+
     log_info "Fetching Flatcar latest version"
     version_info="$(sys_fetch "$version_url" || true)"
     flatcar_version="$(echo "$version_info" | grep '^FLATCAR_VERSION=' | cut -d= -f2 || true)"
     flatcar_build_id="$(echo "$version_info" | grep '^FLATCAR_BUILD_ID=' | cut -d= -f2 | tr -d '"' || true)"
-    
+
     if [[ -z "$flatcar_version" ]]; then
         log_error "Failed to obtain Flatcar latest version"
         return 1
@@ -522,19 +522,19 @@ provider_flatcar() {
     mkdir -p "$WORK_DIR"
     local work_image="${WORK_DIR}/${vmid}_${image_name}"
     CLEANUP_FILES+=("$work_image")
-    
+
     log_info "Creating working copy of image..."
     cp --reflink=auto "$cached_image" "$work_image"
 
     local desc="$(cat <<EOF
-Flatcar Container Linux (Proxmox VE)  
-Version: **${flatcar_version}**  
-Build ID: **${flatcar_build_id}**  
-Checksum (SHA512): **${remote_hash}**  
-Date: **$(date -Is)**  
+Flatcar Container Linux (Proxmox VE)
+Version: **${flatcar_version}**
+Build ID: **${flatcar_build_id}**
+Checksum (SHA512): **${remote_hash}**
+Date: **$(date -Is)**
 EOF
 )"
-    
+
     # Flatcar Proxmox image already includes qemu-guest-agent, so no injection needed.
     pve_build_template "$vmid" "$name" "$work_image" "$desc" "${RESIZE_VALUE}"
 
@@ -542,15 +542,15 @@ EOF
 }
 
 provider_debian() {
-    local vmid="$1" name="$2"
-    local codename="${OS_CODENAME:-trixie}"
+    local vmid="$1" name="$2" arg_codename="${3:-}"
+    local codename="${arg_codename:-${OS_CODENAME:-trixie}}"
     local base_url="https://cloud.debian.org/images/cloud/${codename}/latest"
     local checksum_url="${base_url}/SHA512SUMS"
     local remote_hash image_name image_url cached_image image_date checksums_content
 
     log_info "Preparing Debian (${codename}) template"
     log_info "Fetching Debian checksums"
-    
+
     checksums_content="$(sys_fetch "$checksum_url")"
     if [[ -z "$checksums_content" ]]; then
         log_error "Failed to fetch checksums from ${checksum_url}"
@@ -575,27 +575,27 @@ provider_debian() {
     log_info "Upstream Debian SHA512: ${remote_hash}"
 
     cached_image="$(sys_download_file "$image_url" "wget" "$remote_hash" "sha512")"
-    
+
     image_date="$(sys_fetch -I "$image_url" | awk -F': ' 'tolower($1)=="last-modified" {print $2}' | tr -d '\r')"
     image_date="$(date -d "$image_date" +%Y-%m-%d 2>/dev/null || echo "${image_date:-Unknown}")"
 
     mkdir -p "$WORK_DIR"
     local work_image="${WORK_DIR}/${vmid}_${image_name}"
     CLEANUP_FILES+=("$work_image")
-    
+
     log_info "Creating working copy of image..."
     cp --reflink=auto "$cached_image" "$work_image"
-    
+
     img_inject_qga "$work_image"
 
     local desc="$(cat <<EOF
-Debian **${codename^}** Cloud Image  
-Build date: **${image_date}**  
-Checksum (SHA512): **${remote_hash}**  
-Date: **$(date -Is)**  
+Debian **${codename^}** Cloud Image
+Build date: **${image_date}**
+Checksum (SHA512): **${remote_hash}**
+Date: **$(date -Is)**
 EOF
 )"
-    
+
     pve_build_template "$vmid" "$name" "$work_image" "$desc" "${RESIZE_VALUE}"
 
     log_info "Debian template ${name} (${vmid}) successfully created"
@@ -612,7 +612,7 @@ provider_centos() {
 
     log_info "Preparing CentOS Stream (${centos_version}) template"
     log_info "Fetching CentOS checksums"
-    
+
     remote_hash="$(sys_fetch "$checksum_url" | awk -F'= ' '/^SHA256/ {print $2}')"
 
     if [[ -z "$remote_hash" ]]; then
@@ -628,27 +628,27 @@ provider_centos() {
     log_info "Upstream CentOS SHA256: ${remote_hash}"
 
     cached_image="$(sys_download_file "$image_url" "wget" "$remote_hash" "sha256")"
-    
+
     image_date="$(sys_fetch -I "$image_url" | awk -F': ' 'tolower($1)=="last-modified" {print $2}' | tr -d '\r')"
     image_date="$(date -d "$image_date" +%Y-%m-%d 2>/dev/null || echo "${image_date:-Unknown}")"
 
     mkdir -p "$WORK_DIR"
     local work_image="${WORK_DIR}/${vmid}_${image_name}"
     CLEANUP_FILES+=("$work_image")
-    
+
     log_info "Creating working copy of image..."
     cp --reflink=auto "$cached_image" "$work_image"
-    
+
     img_inject_qga "$work_image"
 
     local desc="$(cat <<EOF
-CentOS Stream **${centos_version}** Cloud Image  
-Build date: **${image_date}**  
-Checksum (SHA256): **${remote_hash}**  
-Date: **$(date -Is)**  
+CentOS Stream **${centos_version}** Cloud Image
+Build date: **${image_date}**
+Checksum (SHA256): **${remote_hash}**
+Date: **$(date -Is)**
 EOF
 )"
-    
+
     pve_build_template "$vmid" "$name" "$work_image" "$desc" "${RESIZE_VALUE}"
 
     log_info "CentOS template ${name} (${vmid}) successfully created"

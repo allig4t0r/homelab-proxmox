@@ -23,5 +23,10 @@ temp/
 .sops.yaml
 .terraform/
 .terraform.lock.hcl
+terraform.tfvars
 terraform.tfstate*
 terraform/modules/cloud-init/generated/*
+kubernetes/
+bootstrap/
+talos/
+.vscode/settings.json
