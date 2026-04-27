@@ -440,7 +440,7 @@ provider_ubuntu() {
     local image_url="https://cloud-images.ubuntu.com/${codename}/current/${image_name}"
     local checksum_url="https://cloud-images.ubuntu.com/${codename}/current/SHA256SUMS"
 
-    log_info "Preparing Ubuntu template (${codename})"
+    log_info "Preparing Ubuntu (${codename}) template"
     log_info "Fetching Ubuntu checksums"
     remote_hash="$(sys_fetch "$checksum_url" | awk "/${image_name}$/ {print \$1}")"
 
@@ -610,7 +610,7 @@ provider_centos() {
     local checksum_url="${image_url}.SHA256SUM"
     local remote_hash cached_image image_date
 
-    log_info "Preparing CentOS Stream (${centos_version}) template"
+    log_info "Preparing CentOS Stream ${centos_version} template"
     log_info "Fetching CentOS checksums"
 
     remote_hash="$(sys_fetch "$checksum_url" | awk -F'= ' '/^SHA256/ {print $2}')"
@@ -671,11 +671,12 @@ main() {
         log_info "Running in batch mode (no CLI parameters)"
         if [[ $LOG_TO_CONSOLE -eq 1 ]]; then log_info "For help and usage instructions, run with -h or --help flag"; fi
         # Put your batch mode templates here
-        # provider_ubuntu  "910" "ubuntu-latest"
-        # provider_flatcar "904" "flatcar-latest"
-        # provider_talos   "905" "talos-latest"
+        # provider_ubuntu  "910" "ubuntu-2404-latest" "noble"
+        # provider_ubuntu  "911" "ubuntu-2604-latest"
         # provider_debian  "902" "debian-latest"
         # provider_centos  "903" "centos-latest"
+        # provider_flatcar "904" "flatcar-latest"
+        # provider_talos   "905" "talos-latest"
         # Batch mode end
     else
         dispatch_template "${POSITIONAL_ARGS[@]}"
