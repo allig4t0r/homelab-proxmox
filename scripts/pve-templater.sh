@@ -422,8 +422,8 @@ provider_talos() {
     xz -dfk "$xz_file" -c > "$raw_img"
 
     local desc="$(cat <<EOF
-Talos Linux published at: **${latest_date}**
-Version: **${talos_version}**
+Talos Linux published at: **${latest_date}**  
+Version: **${talos_version}**  
 Date: **$(date -Is)**
 EOF
 )"
@@ -467,9 +467,9 @@ provider_ubuntu() {
     img_inject_qga "$work_image"
 
     local desc="$(cat <<EOF
-Ubuntu **${codename^}** Cloud Image
-Build date: **${image_date}**
-Checksum (SHA256): **${remote_hash}**
+Ubuntu **${codename^}** Cloud Image  
+Build date: **${image_date}**  
+Checksum (SHA256): **${remote_hash}**  
 Date: **$(date -Is)**
 EOF
 )"
@@ -527,10 +527,10 @@ provider_flatcar() {
     cp --reflink=auto "$cached_image" "$work_image"
 
     local desc="$(cat <<EOF
-Flatcar Container Linux (Proxmox VE)
-Version: **${flatcar_version}**
-Build ID: **${flatcar_build_id}**
-Checksum (SHA512): **${remote_hash}**
+Flatcar Container Linux (Proxmox VE)  
+Version: **${flatcar_version}**  
+Build ID: **${flatcar_build_id}**  
+Checksum (SHA512): **${remote_hash}**  
 Date: **$(date -Is)**
 EOF
 )"
@@ -589,9 +589,9 @@ provider_debian() {
     img_inject_qga "$work_image"
 
     local desc="$(cat <<EOF
-Debian **${codename^}** Cloud Image
-Build date: **${image_date}**
-Checksum (SHA512): **${remote_hash}**
+Debian **${codename^}** Cloud Image  
+Build date: **${image_date}**  
+Checksum (SHA512): **${remote_hash}**  
 Date: **$(date -Is)**
 EOF
 )"
@@ -602,8 +602,8 @@ EOF
 }
 
 provider_centos() {
-    local vmid="$1" name="$2"
-    local centos_version="${OVERRIDE_VERSION:-10}"
+    local vmid="$1" name="$2" arg_version="${3:-}"
+    local centos_version="${arg_version:-${OVERRIDE_VERSION:-10}}"
     local base_url="https://cloud.centos.org/centos/${centos_version}-stream/x86_64/images"
     local image_name="CentOS-Stream-GenericCloud-x86_64-${centos_version}-latest.x86_64.qcow2"
     local image_url="${base_url}/${image_name}"
@@ -642,9 +642,9 @@ provider_centos() {
     img_inject_qga "$work_image"
 
     local desc="$(cat <<EOF
-CentOS Stream **${centos_version}** Cloud Image
-Build date: **${image_date}**
-Checksum (SHA256): **${remote_hash}**
+CentOS Stream **${centos_version}** Cloud Image  
+Build date: **${image_date}**  
+Checksum (SHA256): **${remote_hash}**  
 Date: **$(date -Is)**
 EOF
 )"
@@ -652,6 +652,60 @@ EOF
     pve_build_template "$vmid" "$name" "$work_image" "$desc" "${RESIZE_VALUE}"
 
     log_info "CentOS template ${name} (${vmid}) successfully created"
+}
+
+provider_fedora_coreos() {
+    sys_require_bin xz
+
+    local vmid="$1" name="$2" stream_data fcos_version image_url remote_hash image_date xz_file
+    local stream_url="https://builds.coreos.fedoraproject.org/streams/stable.json"
+
+    log_info "Fetching Fedora CoreOS stable stream info"
+
+    if ! stream_data="$(sys_fetch "$stream_url")"; then
+        log_error "Failed to obtain Fedora CoreOS stream data"
+        return 1
+    fi
+
+    if ! fcos_version="$(echo "$stream_data" | jq -er '.architectures.x86_64.artifacts.proxmoxve.release')" ||
+       ! image_url="$(echo "$stream_data" | jq -er '.architectures.x86_64.artifacts.proxmoxve.formats["qcow2.xz"].disk.location')" ||
+       ! remote_hash="$(echo "$stream_data" | jq -er '.architectures.x86_64.artifacts.proxmoxve.formats["qcow2.xz"].disk.sha256')"; then
+        log_error "Failed to parse Fedora CoreOS stream data"
+        return 1
+    fi
+
+    if ! pve_is_template_outdated "$vmid" "$fcos_version" "tag"; then
+        log_info "Fedora CoreOS image already up-to-date (${fcos_version}). Exiting."
+        return 0
+    fi
+
+    log_info "Upstream Fedora CoreOS version: ${fcos_version}"
+
+    image_date="$(sys_fetch -I "$image_url" | awk -F': ' 'tolower($1)=="last-modified" {print $2}' | tr -d '\r')"
+    image_date="$(date -d "$image_date" +%Y-%m-%d 2>/dev/null || echo "${image_date:-Unknown}")"
+
+    log_info "Downloading Fedora CoreOS ${fcos_version} Proxmox VE image..."
+    xz_file="$(sys_download_file "$image_url" "wget" "$remote_hash" "sha256")"
+
+    mkdir -p "$WORK_DIR"
+    local qcow_img="${WORK_DIR}/fcos_${vmid}.qcow2"
+    CLEANUP_FILES+=("$qcow_img")
+
+    log_debug "Unpacking Fedora CoreOS image..."
+    xz -dfk "$xz_file" -c > "$qcow_img"
+
+    local desc="$(cat <<EOF
+Fedora CoreOS (Proxmox VE)  
+Version: **${fcos_version}**  
+Build date: **${image_date}**  
+Checksum (SHA256): **${remote_hash}**  
+Date: **$(date -Is)**
+EOF
+)"
+
+    pve_build_template "$vmid" "$name" "$qcow_img" "$desc" "${RESIZE_VALUE}"
+
+    log_info "Fedora CoreOS template ${name} (${vmid}) successfully created"
 }
 
 ############################# MAIN ############################################
@@ -677,6 +731,7 @@ main() {
         # provider_centos  "903" "centos-latest"
         # provider_flatcar "904" "flatcar-latest"
         # provider_talos   "905" "talos-latest"
+        # provider_fedora_coreos "912" "coreos-latest"
         # Batch mode end
     else
         dispatch_template "${POSITIONAL_ARGS[@]}"
