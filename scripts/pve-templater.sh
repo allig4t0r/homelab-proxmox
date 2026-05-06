@@ -391,10 +391,12 @@ pve_build_template() {
 
 provider_talos() {
     sys_require_bin xz
-    local vmid="$1" name="$2" talos_version latest_date xz_file
+    local vmid="$1" name="$2" arg_schematic="${3:-}" arg_version="${4:-}" 
+    local talos_version="${arg_version:-$OVERRIDE_VERSION}"
+    local schematic_id="${arg_schematic:-$TALOS_SCHEMATIC_ID}"
+    local latest_date xz_file
 
-    if [[ -n "$OVERRIDE_VERSION" ]]; then
-        talos_version="$OVERRIDE_VERSION"
+    if [[ -n "$talos_version" ]]; then
         latest_date="N/A"
     else
         log_info "Fetching Talos latest version"
@@ -411,7 +413,7 @@ provider_talos() {
 
     log_info "Upstream Talos version: ${talos_version}"
 
-    local talos_url="https://factory.talos.dev/image/${TALOS_SCHEMATIC_ID}/${talos_version}/nocloud-amd64.raw.xz"
+    local talos_url="https://factory.talos.dev/image/${schematic_id}/${talos_version}/nocloud-amd64.raw.xz"
     xz_file="$(sys_download_file "$talos_url" "curl")"
 
     local raw_img="${WORK_DIR}/talos_${vmid}.raw"
@@ -424,6 +426,7 @@ provider_talos() {
     local desc="$(cat <<EOF
 Talos Linux published at: **${latest_date}**  
 Version: **${talos_version}**  
+Schematic: **${schematic_id}**  
 Date: **$(date -Is)**
 EOF
 )"
@@ -731,6 +734,7 @@ main() {
         # provider_centos  "903" "centos-latest"
         # provider_flatcar "904" "flatcar-latest"
         # provider_talos   "905" "talos-latest"
+        # provider_talos   "906" "talos-nvidia-latest" "1b031c661b2cddb0171273ee0e183c35c6964e745ee3232b6354acd866917f7f"
         # provider_fedora_coreos "912" "coreos-latest"
         # Batch mode end
     else
