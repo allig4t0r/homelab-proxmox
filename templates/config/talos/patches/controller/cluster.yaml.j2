@@ -1,5 +1,5 @@
 cluster:
-  allowSchedulingOnControlPlanes: false
+  allowSchedulingOnControlPlanes: #{ schedule_pods_on_controllers | default('false') }#
   apiServer:
     admissionControl:
       $$patch: delete
@@ -22,4 +22,4 @@ cluster:
     extraArgs:
       bind-address: 0.0.0.0
 #  extraManifests:
-#    - https://gitlab.ag/k8s/talos/-/raw/main/kubelet-serving-cert-approver.yaml
+#    - https://raw.githubusercontent.com/argoproj/argo-cd/v3.3.6/manifests/install.yaml

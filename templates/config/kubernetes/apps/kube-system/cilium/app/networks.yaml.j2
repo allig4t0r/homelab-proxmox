@@ -6,7 +6,8 @@ metadata:
 spec:
   allowFirstLastIPs: "No"
   blocks:
-    - cidr: "#{ node_cidr }#"
+    - cidr: #{ node_cidr }#
+#% if not cilium_bgp_enabled %#
 ---
 apiVersion: cilium.io/v2alpha1
 kind: CiliumL2AnnouncementPolicy
@@ -21,6 +22,7 @@ spec:
   nodeSelector:
     matchLabels:
       kubernetes.io/os: linux
+#% endif %#
 #% if cilium_bgp_enabled %#
 ---
 apiVersion: cilium.io/v2
@@ -44,6 +46,12 @@ kind: CiliumBGPPeerConfig
 metadata:
   name: bgp-peer-config-v4
 spec:
+  timers:
+    holdTimeSeconds: 90
+    keepAliveTimeSeconds: 30
+  gracefulRestart:
+    enabled: true
+    restartTimeSeconds: 120
   families:
     - afi: ipv4
       safi: unicast
@@ -60,8 +68,8 @@ spec:
     matchLabels:
       kubernetes.io/os: linux
   bgpInstances:
-    - name: instance-#{ cilium_bgp_node_asn }#
-      localASN: #{ cilium_bgp_node_asn }#
+    - name: instance-#{ cilium_bgp_talos_asn }#
+      localASN: #{ cilium_bgp_talos_asn }#
       peers:
         - name: peer-#{ cilium_bgp_router_asn }#-v4
           peerASN: #{ cilium_bgp_router_asn }#

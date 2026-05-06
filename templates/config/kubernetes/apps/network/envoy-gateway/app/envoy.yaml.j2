@@ -44,45 +44,15 @@ spec:
 apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
 metadata:
-  name: envoy-external
-  annotations:
-    external-dns.alpha.kubernetes.io/target: external.${SECRET_DOMAIN}
-spec:
-  gatewayClassName: envoy
-  infrastructure:
-    annotations:
-      external-dns.alpha.kubernetes.io/hostname: external.${SECRET_DOMAIN}
-      lbipam.cilium.io/ips: "#{ cloudflare_gateway_addr }#"
-  listeners:
-    - name: http
-      protocol: HTTP
-      port: 80
-      allowedRoutes:
-        namespaces:
-          from: Same
-    - name: https
-      protocol: HTTPS
-      port: 443
-      allowedRoutes:
-        namespaces:
-          from: All
-      tls:
-        certificateRefs:
-          - kind: Secret
-            name: ${SECRET_DOMAIN/./-}-homelab-tls
----
-apiVersion: gateway.networking.k8s.io/v1
-kind: Gateway
-metadata:
   name: envoy-internal
   annotations:
-    external-dns.alpha.kubernetes.io/target: internal.${SECRET_DOMAIN}
+    external-dns.alpha.kubernetes.io/target: internal.#{ cluster_domain }#
 spec:
   gatewayClassName: envoy
   infrastructure:
     annotations:
-      external-dns.alpha.kubernetes.io/hostname: internal.${SECRET_DOMAIN}
-      lbipam.cilium.io/ips: "#{ cluster_gateway_addr }#"
+      external-dns.alpha.kubernetes.io/hostname: internal.#{ cluster_domain }#
+      lbipam.cilium.io/ips: #{ cluster_gateway_addr }#
   listeners:
     - name: http
       protocol: HTTP
@@ -99,7 +69,7 @@ spec:
       tls:
         certificateRefs:
           - kind: Secret
-            name: ${SECRET_DOMAIN/./-}-homelab-tls
+            name: kube-homelab-tls
 ---
 apiVersion: gateway.envoyproxy.io/v1alpha1
 kind: BackendTrafficPolicy
@@ -134,7 +104,7 @@ spec:
   clientIPDetection:
     xForwardedFor:
       trustedCIDRs:
-        - "#{ cluster_pod_cidr }#"
+        - #{ cluster_pod_cidr }#
   http2:
     onInvalidMessage: TerminateStream
   http3: {}
@@ -156,9 +126,6 @@ metadata:
     external-dns.alpha.kubernetes.io/controller: none
 spec:
   parentRefs:
-    - name: envoy-external
-      namespace: network
-      sectionName: http
     - name: envoy-internal
       namespace: network
       sectionName: http

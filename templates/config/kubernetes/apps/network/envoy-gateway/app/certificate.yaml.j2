@@ -2,21 +2,21 @@
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
-  name: "${SECRET_DOMAIN/./-}-homelab"
+  name: "kube-homelab"
   namespace: cert-manager
 spec:
   isCA: true
   dnsNames:
-    - "${SECRET_DOMAIN}"
-    - "*.${SECRET_DOMAIN}"
-  commonName: "${SECRET_DOMAIN/./-}-homelab"
-  secretName: "${SECRET_DOMAIN/./-}-homelab-tls"
+    - #{ cluster_domain }#
+    - "*.#{ cluster_domain }#"
+  commonName: "kube-homelab"
+  secretName: "kube-homelab-tls"
   usages:
     - digital signature
   privateKey:
     algorithm: ECDSA
     size: 256
   issuerRef:
-    name: selfsigned-issuer
+    name: kube-homelab-issuer
     kind: ClusterIssuer
     group: cert-manager.io

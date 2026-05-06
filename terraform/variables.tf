@@ -43,7 +43,7 @@ variable "default_non_root_user_hashed_pw" {
 
 variable "vms" {
   default     = {}
-  type        = map(any)
+  type        = any
   description = "A map of VM configurations, manually managed in terraform.tfvars."
 }
 
@@ -64,7 +64,7 @@ variable "node_defaults" {
 
 variable "talos_vms" {
   default     = {}
-  type        = map(any)
+  type        = any
   description = "Templated vms for Talos nodes. Located in talos.auto.tfvars."
 }
 

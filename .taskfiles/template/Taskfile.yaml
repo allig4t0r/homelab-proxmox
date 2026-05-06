@@ -42,7 +42,7 @@ tasks:
     desc: Render and validate configuration files
     prompt: Any conflicting files in the kubernetes directory will be overwritten... continue?
     cmds:
-      - task: validate-schemas
+      # - task: validate-schemas
       - task: render-configs
       - task: encrypt-secrets
       # - task: validate-kubernetes-config

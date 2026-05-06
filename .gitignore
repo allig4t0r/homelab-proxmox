@@ -26,7 +26,7 @@ temp/
 terraform.tfvars
 terraform.tfstate*
 terraform/modules/cloud-init/generated/*
-kubernetes/
-bootstrap/
-talos/
-.vscode/settings.json
+/kubernetes/
+/bootstrap/
+/talos/
+

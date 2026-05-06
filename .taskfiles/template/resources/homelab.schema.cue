@@ -21,7 +21,7 @@ import (
 	cluster_dns_gateway_addr: net.IPv4 & !=cluster_api_addr & !=cluster_gateway_addr
 	cilium_bgp_router_addr?: net.IPv4 & !=""
 	cilium_bgp_router_asn?: string & !=""
-	cilium_bgp_node_asn?: string & !=""
+	cilium_bgp_talos_asn?: string & !=""
 	cilium_loadbalancer_mode?: *"dsr" | "snat"
 
 	certmanager_enabled?: bool

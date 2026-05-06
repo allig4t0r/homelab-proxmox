@@ -69,10 +69,12 @@ class Plugin(makejinja.plugin.Plugin):
         data.setdefault('node_ntp_servers', ['162.159.200.1', '162.159.200.123'])
         data.setdefault('cluster_pod_cidr', '10.42.0.0/16')
         data.setdefault('cluster_svc_cidr', '10.43.0.0/16')
+        data.setdefault('repository_branch', 'main')
+        data.setdefault('repository_visibility', 'public')
         data.setdefault('cilium_loadbalancer_mode', 'dsr')
 
         # If all BGP keys are set, enable BGP
-        bgp_keys = ['cilium_bgp_router_addr', 'cilium_bgp_router_asn', 'cilium_bgp_node_asn']
+        bgp_keys = ['cilium_bgp_router_addr', 'cilium_bgp_router_asn', 'cilium_bgp_talos_asn']
         bgp_enabled = all(data.get(key) for key in bgp_keys)
         data.setdefault('cilium_bgp_enabled', bgp_enabled)
 

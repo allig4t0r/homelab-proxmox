@@ -96,6 +96,6 @@ node_ntp_servers: ["172.17.4.1"]
 # (OPTIONAL) / (e.g. "64513")
 # cilium_bgp_router_asn: ""
 
-# -- The BGP node ASN
+# -- The BGP talos ASN
 # (OPTIONAL) / (e.g. "64514")
-# cilium_bgp_node_asn: ""
+# cilium_bgp_talos_asn: ""
