@@ -18,9 +18,6 @@ mod? talos 'talos'
 [group: 'Terraform']
 mod? tf 'terraform'
 
-[group: 'PVE']
-mod? pve 'pve'
-
 [private]
 default:
     just -l
@@ -58,3 +55,14 @@ recreate-talos:
     just tf sync
     just bootstrap talos
     just bootstrap apps
+
+[doc('Install pve-templater')]
+[group('PVE')]
+[script]
+install-templater:
+    if ! gum confirm "Are you sure to install pve-templater?"; then
+        exit 1
+    fi
+    ssh -i "$PROXMOX_SSH_PRIVATE_KEY_PATH" "$PROXMOX_USER@$PROXMOX_HOST" "apt update && apt install -y curl jq wget libguestfs-tools xz"
+    scp -i "$PROXMOX_SSH_PRIVATE_KEY_PATH" scripts/pve-templater.sh "$PROXMOX_USER@$PROXMOX_HOST:/usr/local/bin/pve-templater"
+    ssh -i "$PROXMOX_SSH_PRIVATE_KEY_PATH" "$PROXMOX_USER@$PROXMOX_HOST" "chmod +x /usr/local/bin/pve-templater"
