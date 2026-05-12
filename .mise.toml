@@ -4,6 +4,9 @@ KUBECONFIG = "{{config_root}}/talos/kubeconfig"
 SOPS_CONFIG = "{{config_root}}/.sops.yaml"
 SOPS_AGE_KEY_FILE = "{{config_root}}/age.key"
 TALOSCONFIG = "{{config_root}}/talos/clusterconfig/talosconfig"
+MINIJINJA_CONFIG_FILE = "{{config_root}}/.minijinja.toml"
+JUST_UNSTABLE = "1"
+# LEFTHOOK_OUTPUT = "false"
 
 [tools]
 "python" = "3.14.3" # required:template
@@ -17,6 +20,9 @@ TALOSCONFIG = "{{config_root}}/talos/clusterconfig/talosconfig"
 "aqua:jqlang/jq" = "latest"
 "aqua:mikefarah/yq" = "latest"
 "aqua:01mf02/jaq" = "latest" # faster Rust clone for jq
+# "aqua:casey/just" = "1.51.0"
+# "aqua:charmbracelet/gum" = "0.17.0"
+# "aqua:chmln/sd" = "1.1.0" # required:template
 
 # ai
 # "aqua:openai/codex" = "latest"

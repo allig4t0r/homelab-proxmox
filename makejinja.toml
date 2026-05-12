@@ -1,9 +1,9 @@
 [makejinja]
-inputs = ["./templates/config"]
+inputs = ["./template/config"]
 output = "./"
 exclude_patterns = ["*.partial.yaml.j2"]
 data = ["./homelab.yaml"]
-import_paths = ["./templates/scripts"]
+import_paths = ["./template/scripts"]
 loaders = ["plugin:Plugin"]
 jinja_suffix = ".j2"
 copy_metadata = true
