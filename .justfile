@@ -46,6 +46,11 @@ init:
 templates file *args:
     minijinja-cli "{{ file }}" {{ args }} | op inject
 
+[doc('Apply terraform manifests')]
+[group('Terraform')]
+sync:
+    just tf sync
+
 [doc('Recreate Talos k8s cluster')]
 [group('Talos')]
 recreate-talos:
