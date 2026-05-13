@@ -87,7 +87,7 @@ locals {
   }
 
   extra_disks = {
-    for vm_name, vm_spec in local.all_vms : vm_name => [
+    for vm_name, vm_spec in local.vms_with_defaults : vm_name => [
       for key, value in vm_spec :
       {
         interface = "scsi${regex("\\d+", key)}"
