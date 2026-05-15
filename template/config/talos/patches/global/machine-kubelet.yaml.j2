@@ -1,0 +1,9 @@
+machine:
+  kubelet:
+    extraConfig:
+      serializeImagePulls: false
+    nodeIP:
+      validSubnets:
+        - #{ node_cidr }#
+#    extraArgs:
+#      rotate-server-certificates: true

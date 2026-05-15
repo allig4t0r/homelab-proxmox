@@ -1,0 +1,32 @@
+# Secrets
+*.pub
+*.key
+*.decrypted~*.yaml
+/age.key
+# Template config files
+/homelab.yaml
+/talos.yaml
+# Generated files
+*.auto.tfvars
+.env
+# Kubernetes
+kubeconfig
+talosconfig
+# Misc.
+.private/
+.task/
+.venv/
+.DS_Store
+Thumbs.db
+*.ai
+temp/
+.sops.yaml
+.terraform/
+.terraform.lock.hcl
+terraform.tfvars
+terraform.tfstate*
+terraform/modules/cloud-init/generated/*
+/kubernetes/
+/bootstrap/
+/talos/
+

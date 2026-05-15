@@ -1,0 +1,22 @@
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: kube-homelab
+  namespace: cert-manager
+spec:
+  isCA: true
+  dnsNames:
+    - #{ cluster_domain }#
+    - "*.#{ cluster_domain }#"
+  commonName: kube-homelab
+  secretName: kube-homelab-tls
+  usages:
+    - digital signature
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  issuerRef:
+    name: kube-homelab-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io

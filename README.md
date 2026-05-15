@@ -4,7 +4,9 @@ Repository for all things Proxmox and using homelab as DevOps
 ## Acknowledgments
 Based on the great guide from https://codingpackets.com/blog/proxmox-cloud-init-with-terraform-and-saltstack/ and also great provider from bpg https://registry.terraform.io/providers/bpg/proxmox/latest/docs/resources/virtual_environment_vm which is miles better than telmate in my opinion, especially in terms of documentation.
 
-This video is a little bit old but still helped to visualize what needs to be done https://www.youtube.com/watch?v=MJgIm03Jxdo
+This video is a little bit old but still helped to visualize what needs to be done in order to create Ubuntu template https://www.youtube.com/watch?v=MJgIm03Jxdo.
+
+Mise task system and talos configuration influenced by https://github.com/onedr0p/cluster-template.
 
 ## Intro
 Highly opionionated Terraform module for HomeLabs with Proxmox. Tested on a single-node Proxmox 9.0.17 with Xeon E5-2680 v4, Terraform v1.13.5, zsh 5.9 and 0.86.0 version of the provider. Defaults were taken mostly from the Proxmox VM creation wizard itself along with the best-practices described in the Proxmox official documentation.
@@ -41,16 +43,9 @@ Generated cloud-init files can be checked in the folder called **generated** alo
 You need to create a role for terraform, a user and a token for this user with these commands:
 
 ```bash
-pveum role add Terraform -privs "Mapping.Audit Mapping.Modify Mapping.Use Permissions.Modify Pool.Allocate Pool.Audit Realm.AllocateUser Realm.Allocate SDN.Allocate SDN.Audit Sys.Audit Sys.Console Sys.Incoming Sys.Modify Sys.AccessNetwork Sys.PowerMgmt Sys.Syslog User.Modify Group.Allocate SDN.Use VM.Allocate VM.Audit VM.Backup VM.Clone VM.Config.CDROM VM.Config.CPU VM.Config.Cloudinit VM.Config.Disk VM.Config.HWType VM.Config.Memory VM.Config.Network VM.Config.Options VM.Console VM.Migrate VM.GuestAgent.Unrestricted VM.PowerMgmt VM.Snapshot.Rollback VM.Snapshot Datastore.Allocate Datastore.AllocateSpace Datastore.AllocateTemplate Datastore.Audit"
-```
-
-```bash
+pveum role add Terraform -privs "Mapping.Audit Mapping.Modify Mapping.Use Permissions.Modify Pool.Allocate Pool.Audit Realm.AllocateUser Realm.Allocate SDN.Allocate SDN.Audit Sys.Audit Sys.bash Sys.Incoming Sys.Modify Sys.AccessNetwork Sys.PowerMgmt Sys.Syslog User.Modify Group.Allocate SDN.Use VM.Allocate VM.Audit VM.Backup VM.Clone VM.Config.CDROM VM.Config.CPU VM.Config.Cloudinit VM.Config.Disk VM.Config.HWType VM.Config.Memory VM.Config.Network VM.Config.Options VM.bash VM.Migrate VM.GuestAgent.Unrestricted VM.PowerMgmt VM.Snapshot.Rollback VM.Snapshot Datastore.Allocate Datastore.AllocateSpace Datastore.AllocateTemplate Datastore.Audit"
 pveum user add terraform@pve
-```
-```bash
 pveum aclmod / -user terraform@pve -role Terraform
-```
-```bash
 pveum user token add terraform@pve provider --privsep=0
 ```
 Add the token to your .bashrc or .zshrc file like this:

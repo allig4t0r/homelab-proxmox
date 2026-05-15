@@ -1,0 +1,54 @@
+[env]
+_.python.venv = { path = "{{config_root}}/.venv", create = true } # required:template
+KUBECONFIG = "{{config_root}}/talos/kubeconfig"
+SOPS_CONFIG = "{{config_root}}/.sops.yaml"
+SOPS_AGE_KEY_FILE = "{{config_root}}/age.key"
+TALOSCONFIG = "{{config_root}}/talos/clusterconfig/talosconfig"
+MINIJINJA_CONFIG_FILE = "{{config_root}}/.minijinja.toml"
+JUST_UNSTABLE = "1"
+# LEFTHOOK_OUTPUT = "false"
+
+[tools]
+"python" = "3.14.3" # required:template
+"aqua:astral-sh/ruff" = "latest" #python linter
+"aqua:astral-sh/uv" = "latest" # required:template
+"pipx" = "latest" # required:template
+"pipx:makejinja" = "2.8.2" # required:template
+"aqua:cli/cli" = "latest" #github cli
+"aqua:cue-lang/cue" = "latest" # required:template
+"aqua:go-task/task" = "latest"
+"aqua:jqlang/jq" = "latest"
+"aqua:mikefarah/yq" = "latest"
+"aqua:01mf02/jaq" = "latest" # faster Rust clone for jq
+# "aqua:casey/just" = "1.51.0"
+# "aqua:charmbracelet/gum" = "0.17.0"
+# "aqua:chmln/sd" = "1.1.0" # required:template
+
+# ai
+# "aqua:openai/codex" = "latest"
+# "aqua:anthropics/claude-code" = "latest"
+# "npm:@google/gemini-cli" = "latest"
+
+# encryption
+"aqua:FiloSottile/age" = "latest"
+"aqua:getsops/sops" = "latest"
+
+# k8s
+"aqua:siderolabs/talos" = "latest" #talosctl
+"aqua:budimanjojo/talhelper" = "latest"
+"aqua:kubernetes-sigs/kustomize" = "latest"
+"aqua:kubernetes/kubernetes/kubectl" = "latest"
+"aqua:kubernetes-sigs/krew" = "latest"
+"aqua:cilium/cilium-cli" = "latest"
+# "aqua:fluxcd/flux2" = "latest"
+"aqua:helm/helm" = "latest"
+"aqua:helmfile/helmfile" = "latest"
+"aqua:yannh/kubeconform" = "latest"
+"aqua:argoproj/argo-cd" = "latest"
+"aqua:ahmetb/kubectx/kubens" = "latest"
+"aqua:ahmetb/kubectx" = "latest"
+# "aqua:containerd/nerdctl" = "latest" # only for linux/windows
+
+# ansible
+"pipx:ansible" = "latest"
+"pipx:ansible-lint" = "latest"

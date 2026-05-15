@@ -1,0 +1,35 @@
+---
+
+# This helmfile is for extracting and installing Custom Resource Definitions (CRDs) from Helm charts.
+# It is not intended to be used with helmfile apply or helmfile sync.
+
+helmDefaults:
+  args:
+    - --include-crds
+    - --no-hooks
+
+releases:
+  - name: external-dns
+    namespace: network
+    chart: oci://ghcr.io/home-operations/charts-mirror/external-dns
+    version: 1.20.0
+
+  - name: envoy-gateway
+    namespace: network
+    chart: oci://mirror.gcr.io/envoyproxy/gateway-helm
+    version: v1.7.3
+
+  - name: prometheus-operator-crds
+    namespace: monitoring
+    chart: oci://ghcr.io/prometheus-community/charts/prometheus-operator-crds
+    version: 29.0.0
+
+  - name: grafana-operator
+    namespace: monitoring
+    chart: oci://ghcr.io/grafana/helm-charts/grafana-operator
+    version: 5.22.2
+
+  - name: argocd
+    namespace: argocd
+    chart: oci://ghcr.io/argoproj/argo-helm/argo-cd
+    version: 9.5.12

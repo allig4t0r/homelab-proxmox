@@ -1,0 +1,25 @@
+cluster:
+  allowSchedulingOnControlPlanes: #{ schedule_pods_on_controllers | default('false') }#
+  apiServer:
+    admissionControl:
+      $$patch: delete
+    extraArgs:
+      # https://kubernetes.io/docs/tasks/extend-kubernetes/configure-aggregation-layer/
+      enable-aggregator-routing: true
+  controllerManager:
+    extraArgs:
+      bind-address: 0.0.0.0
+  coreDNS:
+    disabled: true
+  etcd:
+    extraArgs:
+      listen-metrics-urls: http://0.0.0.0:2381
+    advertisedSubnets:
+      - #{ node_cidr }#
+  proxy:
+    disabled: true
+  scheduler:
+    extraArgs:
+      bind-address: 0.0.0.0
+#  extraManifests:
+#    - https://raw.githubusercontent.com/argoproj/argo-cd/v3.3.6/manifests/install.yaml

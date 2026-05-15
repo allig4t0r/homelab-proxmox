@@ -1,0 +1,17 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: argocd
+spec:
+  chartRef:
+    kind: OCIRepository
+    name: argocd
+  interval: 1h
+  values:
+    global:
+      domain: argocd.kube.ag
+  redis:
+    image:
+      repository: redis
+      tag: 8.6.3-alpine

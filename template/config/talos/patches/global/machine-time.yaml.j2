@@ -1,0 +1,8 @@
+machine:
+  time:
+    disabled: false
+    bootTimeout: 2m0s # Specifies the timeout when the node time is considered to be in sync unlocking the boot sequence.
+    servers:
+      #% for item in node_ntp_servers %#
+      - #{ item }#
+      #% endfor %#
