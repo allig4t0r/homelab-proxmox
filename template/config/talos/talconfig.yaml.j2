@@ -2,7 +2,7 @@
 clusterName: kubernetes
 
 # talosVersion: "${talosVersion}"
-# kubernetesVersion: "${kubernetesVersion}"
+kubernetesVersion: "${kubernetesVersion}"
 
 endpoint: https://#{ cluster_api_addr }#:6443
 additionalApiServerCertSans: &sans
@@ -16,7 +16,7 @@ additionalMachineCertSans: *sans
 clusterPodNets: ["#{ cluster_pod_cidr }#"]
 clusterSvcNets: ["#{ cluster_svc_cidr }#"]
 
-domain: #{ cluster_domain }#
+#domain: #{ cluster_domain }#
 
 # Disable built-in CNI to use Cilium
 cniConfig:
