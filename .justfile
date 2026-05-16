@@ -16,7 +16,7 @@ mod? kube 'kubernetes'
 mod? talos 'talos'
 
 [group: 'Terraform']
-mod? tf 'terraform'
+mod? terraform 'terraform'
 
 [private]
 default:
@@ -40,7 +40,7 @@ configure:
 [group('Template')]
 init:
     just template init
-    just tf init
+    just terraform init
 
 [private]
 templates file *args:
@@ -48,16 +48,16 @@ templates file *args:
 
 [doc('Apply terraform manifests')]
 [group('Terraform')]
-sync:
-    just tf sync
+tf:
+    just terraform sync
 
 [doc('Recreate Talos k8s cluster')]
 [group('Talos')]
 recreate-talos:
-    just tf destroy-talos
+    just terraform destroy-talos
     just template reset
     just configure
-    just tf sync
+    just terraform sync
     just bootstrap talos
     just bootstrap apps
 
