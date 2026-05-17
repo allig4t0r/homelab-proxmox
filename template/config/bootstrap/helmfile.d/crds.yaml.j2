@@ -12,22 +12,22 @@ releases:
   - name: external-dns
     namespace: network
     chart: oci://ghcr.io/home-operations/charts-mirror/external-dns
-    version: 1.20.0
+    version: 1.21.1
 
   - name: envoy-gateway
     namespace: network
     chart: oci://mirror.gcr.io/envoyproxy/gateway-helm
-    version: v1.7.3
-
-  - name: prometheus-operator-crds
-    namespace: monitoring
-    chart: oci://ghcr.io/prometheus-community/charts/prometheus-operator-crds
-    version: 29.0.0
+    version: v1.8.0
 
   - name: grafana-operator
     namespace: monitoring
     chart: oci://ghcr.io/grafana/helm-charts/grafana-operator
     version: 5.22.2
+
+  - name: kube-prometheus-stack
+    namespace: monitoring
+    chart: oci://ghcr.io/prometheus-community/charts/kube-prometheus-stack
+    version: 85.0.2
 
   - name: argocd
     namespace: argocd
